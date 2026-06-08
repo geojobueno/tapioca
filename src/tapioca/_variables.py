@@ -1,6 +1,6 @@
 import numpy as np
 
-_variables_list = ["density",
+VARIABLES_LIST = ["density",
 "heat",
 "strain",
 "lithology",
@@ -11,16 +11,15 @@ _variables_list = ["density",
 "thermal_diffusivity",
 "velocity",
 "viscosity",
-"surface",
 "Phi",
 "dPhi",
 "X_depletion"]
 
-_varsTypes = { # Outputs
+VARS_TYPES = { # Outputs
               'density': np.float64,
               'pressure': np.float64,
               'heat': np.float64,
-              'thermal_difussivity': np.float64,
+              'thermal_diffusivity': np.float64,
               'surface': np.float64,
               'lithology': np.int8, # int 8 is enough for 256 lithologies, and it saves memory
               'viscosity': np.float64, 
@@ -39,9 +38,9 @@ _varsTypes = { # Outputs
 }
 
 
-seg_per_year = 60*60*24*365.25 # seconds per year
+SEC_PER_YEAR = 60*60*24*365.25 # seconds per year
 
-cm = 1/2.54 # cm per inch -> convert plotting to centimeters by *cm 
+CM = 1/2.54 # cm per inch -> convert plotting to centimeters by *cm 
 
 
 # Useful data types descriptions:

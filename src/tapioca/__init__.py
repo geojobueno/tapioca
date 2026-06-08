@@ -1,19 +1,16 @@
-import warnings
-import xarray as xr
-import numpy as np
+"""
+Tapioca-Mandyoc: Input and Output management and post-processing for Mandyoc geodynamic models.
+"""
+
+from warnings import catch_warnings, filterwarnings
 
 __version__ = "0.1.0"
 
 # 1. Import variables
-from ._variables import *
+from ._variables import seg_per_year, _variables_list, _variables_dtypes
 
 # 2. Import Scenario Classes
-from .scenClasses import *
-
-with warnings.catch_warnings(): #filtering warning for the preexisting attribute of the datatree accessor
-    warnings.filterwarnings("ignore", message=".*name 'postproc'.*")
-    # 3. Import post-processing classes and functions
-    from .post_processing import *
+from .scenClasses import MandyocScen
 
 # 5. Import plotting functions
 
