@@ -20,7 +20,7 @@ class MandyocScen:
                  xlimits=None, zlimits=None, tlimits=None, # ylimits should be implemented for the 3D version
                  thick_air=40e3,
                  chunks_vars={"x": 'auto', "z": 'auto', 'time': "auto"},
-                 filter_air=True, #only relevant if load particles
+                 filter_air=True, air_layer=None, #only relevant if load particles
                  verbose=False):
 
         # Setting directories and scen name
@@ -95,7 +95,7 @@ class MandyocScen:
             
         # Loading particles
         if load_particles:
-            self._load_particles(particles_file, chunks={'id': 'auto'}, filter_air=filter_air)
+            self._load_particles(particles_file, chunks={'id': 'auto'}, filter_air=filter_air, air_layer=air_layer)
             
         if self.verbose: print(f"Particles [{particles_file}] loaded")
             
@@ -209,9 +209,9 @@ class MandyocScen:
             if isinstance(air_layer, int): air = air_layer
             else: air = int(particles.layer.max())
                 
-            cond = particles != air
+            cond = particles.layer != air
             particles = particles.where(cond)
-            if verbose: print(f'Air particles filtered [{air}]')
+            if self.verbose: print(f'Air particles filtered [{air}]')
             
         self.DTree['/particles/original'] = particles
         self.particles_loaded = True
@@ -227,7 +227,7 @@ class MandyocScen:
         if replace_original==True:
             selection_name = 'original'
         elif selection_name == '':
-            selection_name == 'selected'
+            selection_name = 'selected'
         
         source_ds = self.DTree.particles[selected_name].ds
     
@@ -252,13 +252,20 @@ class MandyocScen:
         # apply the support selection function
         pts, selected_name = self._get_pts(select_original, selected_name)
         
-        # get IDs of the time "i" and time "0"
-        tr_0 = pts.sel(time=timerange[0],method='nearest').dropna(dim="id").id.values
-        tr_i = pts.sel(time=timerange[1],method='nearest').dropna(dim="id").id.values
+        # select particles based on two snapshots
+        snap_0 = pts.sel(time=timerange[0], method='nearest').compute()
+        snap_i = pts.sel(time=timerange[1], method='nearest').compute()
+
+        # selecting particles based on the X coordinate and discarding null values
+        tr_0 = snap_0.id.where(~snap_0.x.isnull(), drop=True).values
+        tr_i = snap_i.id.where(~snap_i.x.isnull(), drop=True).values
 
         # get the difference between them (using sets)
         ids = list(set(tr_i)-set(tr_0))
-        
+
+        if self.verbose:
+            print(f'{len(ids)} particles were selected between {timerange[0]}-{timerange[1]}')
+            
         # apply the support selection function
         self._apply_selection(ids, 
                               selected_name=selected_name, 
@@ -400,4 +407,3 @@ class MandyocScen:
 
         gc.collect()
         return self
-
