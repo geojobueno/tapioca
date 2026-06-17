@@ -1,3 +1,9 @@
+# Examples folder edition
+tests/example-continental-rift
+
+# Conda env test
+test_env.yml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
