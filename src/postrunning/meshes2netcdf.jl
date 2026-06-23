@@ -299,10 +299,10 @@ function replace_negatives_with_neighbors!(mat::Matrix)
     rows::Int16, cols::Int16 = size(mat)
     negative_indices = findall(result .< 0)
 
-    for idx in negative_indices
+    @inbounds for idx in negative_indices
         i::Int16, j::Int16 = idx[1], idx[2]
         found = false
-        for (di, dj) in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        @inbounds for (di, dj) in [(-1, 0), (1, 0), (0, -1), (0, 1)]
             ni, nj = i + di, j + dj
             if (1 <= ni <= rows && 1 <= nj <= cols) && mat[ni, nj] >= 0
                 result[i, j] = mat[ni, nj]
