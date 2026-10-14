@@ -15,13 +15,14 @@ class MandyocScen:
     Core data manager for Mandyoc simulations (results).
 
     This class parses output directories, reads model parameters, and constructs 
-    a unified DataTree. The classes alsos contains the scenarios params.txt 
-    [future implementations will read temporal conditions]. 
+    a unified DataTree. The classes alsos contains the params.txt stored as a
+    frozen dictionary. 
     
     It aligns meshes (common variables), upscaled lithology, surface topography,
     and Lagrangian particles into a single navigable object. 
 
-    Functions to manipulate data of `MandyocScen` are built-in and in acessors.
+    Functions to manipulate data of `MandyocScen` are built-in within this class
+    and as acessors in `post_processing.py`.
 
     Parameters
     ----------
@@ -140,10 +141,9 @@ class MandyocScen:
         if isinstance(name, str): self.name = name
         else: self.name = self.path.name
 
-        if self.verbose:
-            print(f'Scenario at: {self.path}')
-            print(f'Scenario name: {self.name}')
-            print(f'Params - Ok')
+        self._print_verbose(f'Scenario at: {self.path}')
+        self._print_verbose(f'Scenario name: {self.name}')
+        self._print_verbose(f'Params - Ok')
         
         # Handle Variables and Extract Metadata
         if isinstance(variables, str): variables = [variables]
@@ -159,10 +159,10 @@ class MandyocScen:
         self.tlimits = tlimits if tlimits is not None else [self.TMIN, self.TMAX]
         self.thick_air = thick_air #m
 
-        if self.verbose:
-            print(f'x limits: {self.xlimits}')
-            print(f'z limits: {self.zlimits}')
-            print(f'time limits: {self.tlimits}')
+        
+        self._print_verbose(f'x limits: {self.xlimits}')
+        self._print_verbose(f'z limits: {self.zlimits}')
+        self._print_verbose(f'time limits: {self.tlimits}')
         
         self.z_corrected = False
         self.particles_loaded = False
@@ -171,10 +171,10 @@ class MandyocScen:
         self.DTree = DataTree.from_dict( {"mesh":None,"surface":None,"particles":None})
 
         # Passing some metadata to the DataTree
-        self.DTree.attrs['name'] = self.name
-        self.DTree.attrs['xlimits'] = self.xlimits
-        self.DTree.attrs['zlimits'] = self.zlimits
-        self.DTree.attrs['tlimits'] = self.tlimits
+        # self.DTree.attrs['name'] = self.name
+        # self.DTree.attrs['xlimits'] = self.xlimits
+        # self.DTree.attrs['zlimits'] = self.zlimits
+        # self.DTree.attrs['tlimits'] = self.tlimits
         
         # Reading and storing standard variables (Nx,Nz)
         standard_datasets = []
@@ -186,7 +186,7 @@ class MandyocScen:
         if standard_datasets:
             self.DTree['/mesh/original'] = xr.merge(standard_datasets, join='outer')
 
-        if self.verbose: print(f"Variables loaded: {' '.join(variables)}")
+        self._print_verbose(f"Variables loaded: {' '.join(variables)}")
         
         # Reading and storing the lithology (upscaled mesh)
         if load_lithology==True:
@@ -194,7 +194,7 @@ class MandyocScen:
             if ds_litho is not None:
                 self.DTree['/mesh/upscaled'] = ds_litho
 
-        if self.verbose: print("Lithology loaded")
+        self._print_verbose("Lithology loaded")
             
         # Reading the surface/topography (only X dimension)
         if load_surface==True:
@@ -203,14 +203,31 @@ class MandyocScen:
             if ds_surf is not None:
                 self.DTree['/surface/topography'] = ds_surf
 
-        if self.verbose: print("Surface loaded")
+        self._print_verbose("Surface loaded")
             
         # Loading particles
         if load_particles:
             self._load_particles(particles_file, chunks={'id': 'auto'}, filter_air=filter_air, air_layer=air_layer)
             
-        if self.verbose: print(f"Particles [{particles_file}] loaded")
+        self._print_verbose(f"Particles [{particles_file}] loaded")
         
+        return None
+
+    def _print_verbose(self, message:str, ending ="\n"):
+        '''
+        Internal method to print a message if verbose is True
+
+        Parameters
+        ----------
+        message : str
+            The printed message
+
+        ending : str
+            The end of the string text.
+            Default is `\n`.
+        '''
+        if self.verbose:
+            print(message,end=ending)
         return None
     
     def get_scenarioData(self, var:str='density'):
@@ -299,7 +316,7 @@ class MandyocScen:
         """
         
         if self.z_corrected:
-            if self.verbose: print("Z was already corrected")
+            self._print_verbose("Z was already corrected")
             return False
         
         if factor is None:
@@ -330,9 +347,9 @@ class MandyocScen:
         self.ZMAX += factor
         self.ZMIN += factor
         
-        if self.verbose:
-            print(f"Z coordinate corrected by + {factor} m")
-            print(f"New z limits: {self.zlimits}")
+        
+        self._print_verbose(f"Z coordinate corrected by + {factor} m")
+        self._print_verbose(f"New z limits: {self.zlimits}")
             
         self.z_corrected = True
         return True
@@ -457,7 +474,7 @@ class MandyocScen:
                 
             cond = particles.lithology != air
             particles = particles.where(cond)
-            if self.verbose: print(f'Air particles filtered [{air}]')
+            self._print_verbose(f'Air particles filtered [{air}]')
             
         self.DTree['/particles/original'] = particles
         self.particles_loaded = True
@@ -474,9 +491,9 @@ class MandyocScen:
         source_path, target_path = paths
         selected_name, selection_name = names
 
-        if self.verbose:
-            print(f'Selected particles: {selected_name}')
-            print(f'Selection at: {selection_name}')
+    
+        self._print_verbose(f'Selected particles: {selected_name}')
+        self._print_verbose(f'Selection at: {selection_name}')
 
         # Lazy selection
         pts = self.DTree[source_path].ds
@@ -533,8 +550,7 @@ class MandyocScen:
         # get the difference between them (using sets)
         ids = list(set(tr_i)-set(tr_0))
 
-        if self.verbose:
-            print(f'{len(ids)} particles were selected between {timerange[0]}-{timerange[1]}')
+        self._print_verbose(f'{len(ids)} particles were selected between {timerange[0]}-{timerange[1]}')
             
         # apply the support selection function
         self._apply_selection(ids, 
