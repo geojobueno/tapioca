@@ -3,9 +3,13 @@ Input builders for Mandyoc scenarios.
 
 - MandyocBuilder, VelocityFieldBuilder and TemperatureFieldBuilder: generic builders of the
   interfaces, material fields, velocity and temperature of a scenario, used from scripts;
-- svg: scenarios drawn in SVG files (e.g. made in Inkscape), see SVGScenario.
+  
+- materials: Mandyoc layers (MandyocLayer) and their rheologies;
+- svg: geometry and materials of a scenario drawn in an SVG file (e.g. made in Inkscape);
+- scenario: SVGScenario, which builds all the input files of a scenario from an SVG
+  (interfaces, parameters, initial temperature and velocity for rifting, compression,
+  accordion and quiescence experiments).
 """
-
 # getting the same version of the whole module
 from ..__init__ import __version__
 

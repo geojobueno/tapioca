@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Subduction setup: oceanic lithosphere (left) - continental margin ramp - non-cratonic continental lithosphere - craton (right).
-     1600 x 400 km, 1 user unit = 1 km, page = model domain (see the 'setup' rectangle for Lx, Lz, dx, dz).
+     1600 x 400 km, 1 user unit = 1 km, page = model domain (see the 'domain' rectangle for Lx, Lz, dx, dz).
      Oceanic lithosphere (x < 797.5 km): crust 7 km + mantle 53 km (60 km below the surface).
      Continental margin ramp (797.5 < x < 897.5 km, 100 km wide):
        - Moho from 47 to 75 km depth below the page top (crust 7 -> 35 km); the continental crustal layers thin proportionally;
@@ -48,7 +48,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer1"
-     inkscape:label="lithologies">
+     inkscape:label="litologias">
     <rect
        id="asthenosphere"
        inkscape:label="asthenosphere"
@@ -63,11 +63,7 @@
          id="desc1">wet olivine
 C = 1.0
 rho = 3378.0
-H = 0.0
-A = 1.393e-14
-n = 3
-Q = 429.0e3
-V = 15.0e-6</desc>
+H = 0.0</desc>
     </rect>
     <rect
        id="lower_cratonic_mantle_right"
@@ -84,11 +80,7 @@ V = 15.0e-6</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 125 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+h = 125 km</desc>
     </rect>
     <rect
        id="upper_cratonic_mantle_right"
@@ -105,11 +97,7 @@ V = 25.0e-6</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+h = 85 km</desc>
     </rect>
     <path
        id="lithospheric_mantle"
@@ -123,11 +111,7 @@ V = 25.0e-6</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+h = 85 km</desc>
     </path>
     <rect
        id="oceanic_lithospheric_mantle"
@@ -144,11 +128,7 @@ V = 25.0e-6</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 53 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+h = 53 km</desc>
     </rect>
     <rect
        id="oceanic_crust"
@@ -165,11 +145,7 @@ V = 25.0e-6</desc>
 C = 100.0
 rho = 2800.0
 H = 0.19e-6 / 2800.0
-h = 7 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 7 km</desc>
     </rect>
     <path
        id="lower_crust"
@@ -183,11 +159,7 @@ V = 0.0</desc>
 C = 100.0
 rho = 2800.0
 H = 0.19e-6 / 2800.0
-h = 10 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 10 km</desc>
     </path>
     <path
        id="upper_crust"
@@ -201,11 +173,7 @@ V = 0.0</desc>
 C = 1.0
 rho = 2700.0
 H = 1.67e-6 / 2700.0
-h = 21 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 21 km</desc>
     </path>
     <path
        id="decolement"
@@ -219,11 +187,7 @@ V = 0.0</desc>
 C = 0.1
 rho = 2350.0
 H = 1.25e-6 / 2700.0
-h = 1 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 1 km</desc>
     </path>
     <path
        id="sediments"
@@ -237,11 +201,7 @@ V = 0.0</desc>
 C = 1.0
 rho = 2700.0
 H = 1.25e-6 / 2700.0
-h = 3 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 3 km</desc>
     </path>
     <rect
        id="air"
@@ -258,11 +218,7 @@ V = 0.0</desc>
 C = 1.0
 rho = 1.0
 H = 0.0
-h = 40 km
-A = 1.0e-18
-n = 1.0
-Q = 0.0
-V = 0.0</desc>
+h = 40 km</desc>
     </rect>
     <path
        id="weak_seed"
@@ -275,30 +231,25 @@ V = 0.0</desc>
          id="desc12">dry olivine
 C = 0.1
 rho = 3330.0
-H = 0.0
-h = 10 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+H = 0.0</desc>
     </path>
   </g>
   <g
      inkscape:groupmode="layer"
-     id="layer_setup"
-     inkscape:label="domain">
+     id="layer_domain"
+     inkscape:label="dominio">
     <rect
-       id="setup"
-       inkscape:label="setup"
+       id="domain"
+       inkscape:label="domain"
        x="0"
        y="0"
        width="1600"
        height="400"
        style="fill:none;stroke:#ff0000;stroke-width:1">
       <title
-         id="title_setup">Model setup</title>
+         id="title_domain">Model domain</title>
       <desc
-         id="desc_setup">Lx = 1600 km
+         id="desc_domain">Lx = 1600 km
 Lz = 400 km
 dx = 2 km
 dz = 2 km

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Example of the quiescence regime: cratonic keel with a mobile belt in the centre of the domain
      (cratonic_keel experiment of generate_input_files_database.py). No velocity is imposed at the boundaries.
-     4000 x 600 km, 1 user unit = 1 km, page = model domain (see the 'setup' rectangle for Lx, Lz, dx, dz and the experiment).
+     4000 x 600 km, 1 user unit = 1 km, page = model domain (see the 'domain' rectangle for Lx, Lz, dx, dz and the experiment).
      Lithosphere (everywhere): upper crust 20 km, lower crust 15 km, lithospheric mantle 85 km (120 km below the surface).
      Cratonic keel (x = 1400-2600 km, L_keel = 1200 km): lithospheric mantle down to 290 km below the page top
        (250 km below the surface, 130 km thicker than outside).
@@ -30,7 +30,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer1"
-     inkscape:label="lithologies">
+     inkscape:label="litologias">
     <rect
        id="asthenosphere"
        inkscape:label="asthenosphere"
@@ -45,11 +45,7 @@
          id="desc1">wet olivine
 C = 1.0
 rho = 3378.0
-H = 7.38e-12
-A = 1.393e-14
-n = 3
-Q = 429.0e3
-V = 15.0e-6</desc>
+H = 7.38e-12</desc>
     </rect>
     <path
        id="lithospheric_mantle"
@@ -63,11 +59,7 @@ V = 15.0e-6</desc>
 C = 1.0
 rho = 3354.0
 H = 9.0e-12
-h = 85 km
-A = 2.4168e-15
-n = 3.5
-Q = 540.0e3
-V = 25.0e-6</desc>
+h = 85 km</desc>
     </path>
     <rect
        id="mobile_belt"
@@ -84,11 +76,7 @@ V = 25.0e-6</desc>
 C = 1.0
 rho = 3354.0
 H = 9.0e-12
-h = 130 km
-A = 1.393e-14
-n = 3
-Q = 429.0e3
-V = 15.0e-6</desc>
+h = 130 km</desc>
     </rect>
     <rect
        id="lower_crust"
@@ -105,11 +93,7 @@ V = 15.0e-6</desc>
 C = 1.0
 rho = 2800.0
 H = 2.86e-10
-h = 15 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 15 km</desc>
     </rect>
     <rect
        id="upper_crust"
@@ -126,11 +110,7 @@ V = 0.0</desc>
 C = 1.0
 rho = 2700.0
 H = 9.26e-10
-h = 20 km
-A = 8.574e-28
-n = 4.0
-Q = 222.0e3
-V = 0.0</desc>
+h = 20 km</desc>
     </rect>
     <rect
        id="air"
@@ -147,29 +127,25 @@ V = 0.0</desc>
 C = 1.0
 rho = 1.0
 H = 0.0
-h = 40 km
-A = 1.0e-18
-n = 1.0
-Q = 0.0
-V = 0.0</desc>
+h = 40 km</desc>
     </rect>
   </g>
   <g
      inkscape:groupmode="layer"
-     id="layer_setup"
-     inkscape:label="domain">
+     id="layer_domain"
+     inkscape:label="dominio">
     <rect
-       id="setup"
-       inkscape:label="setup"
+       id="domain"
+       inkscape:label="domain"
        x="0"
        y="0"
        width="4000"
        height="600"
        style="fill:none;stroke:#ff0000;stroke-width:1">
       <title
-         id="title_setup">Model setup</title>
+         id="title_domain">Model domain</title>
       <desc
-         id="desc_setup">Lx = 4000 km
+         id="desc_domain">Lx = 4000 km
 Lz = 600 km
 dx = 2 km
 dz = 2 km

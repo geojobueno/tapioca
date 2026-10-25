@@ -19,6 +19,7 @@ dependencies:
   - dask
   - svgelements
   - pytest
+  
   # documentation
   - sphinx
   - myst-parser
