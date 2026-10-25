@@ -5,3 +5,4 @@
 
 install.md
 quick_postproc.md
+svg_scenarios.md

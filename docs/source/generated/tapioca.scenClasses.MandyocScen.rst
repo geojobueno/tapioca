@@ -17,9 +17,10 @@
       ~MandyocScen.classify_ParticlesRange
       ~MandyocScen.correctZcoord
       ~MandyocScen.fieldToParticle
+      ~MandyocScen.filter_air_fields
       ~MandyocScen.get_scenarioData
       ~MandyocScen.selectParticles_bycoords
-      ~MandyocScen.selectParticles_bylayers
+      ~MandyocScen.selectParticles_bylithology
       ~MandyocScen.selectParticles_bytimerange
    
    

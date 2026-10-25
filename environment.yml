@@ -20,3 +20,4 @@ dependencies:
   - numba
   - h5netcdf
   - dask
+  - svgelements

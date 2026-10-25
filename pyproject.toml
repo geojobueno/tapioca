@@ -35,8 +35,13 @@ dependencies = [
     "astropy",
     "pymp-pypi",
     "numba",
-    "dask"
+    "dask",
+    "svgelements"
 ]
+
+[project.scripts]
+tapioca-svg = "tapioca.inputs.cli:main"
+tapioca-svg-interfaces = "tapioca.inputs.svg:main"
 
 
 # Future implementations!!
