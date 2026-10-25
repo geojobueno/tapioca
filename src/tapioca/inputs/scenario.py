@@ -1073,8 +1073,8 @@ class SVGScenario:
                 vmax = np.round(max(abs(self.VX[:, column] * scale)), 0)
                 vmax = vmax if(vmax > 0) else 1.0
                 axv = axs.inset_axes((origin, 0, (1-fac)*2, 1))
-                #only the hatch is drawn (with alpha=0 the hatch is also invisible in recent matplotlib versions)
-                axv.fill_betweenx((-z + sa) / 1.0e3, self.VX[:, column] * scale, 0, facecolor='none', edgecolor='none', hatch='---')
+                #only the hatch is drawn: the hatch takes the edge color (with alpha=0 it is also invisible in matplotlib >= 3.11)
+                axv.fill_betweenx((-z + sa) / 1.0e3, self.VX[:, column] * scale, 0, facecolor='none', edgecolor='k', linewidth=0, hatch='---')
                 axv.set_ylim(ylimplot)
                 axv.set_yticks([])
                 axv.set_xticks([])
