@@ -702,7 +702,8 @@ class SVGScenario:
         Initial velocity (Nz, Nx) with the boundary conditions of the regime (None in the quiescence regime).
         Constant velocity down to h_v_const below the surface (reference thickness + 20 km, where the lithosphere
         is thickest in rifting and accordion, as in M300, and at the moving boundary in compression) and the return
-        flow below it, so that the integral of the inflow is zero.
+        flow below it, so that the integral of the inflow is zero. In compression the return flow leaves through the
+        moving boundary and the opposite boundary is fixed (VX = 0).
         '''
         if(not self.velocity_from_ascii):
             self.VX, self.VZ = None, None
@@ -724,24 +725,35 @@ class SVGScenario:
         vR = 2 * vL * (self.h_v_const + self.fac_air + ha) / ha #to ensure the integral equals zero
 
         VX = np.zeros_like(X)
-        cond = (Z > self.h_v_const + thickness_sa_bc) & (X == 0)
-        VX[cond] = vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
-        cond = (Z > self.h_v_const + thickness_sa_bc) & (X == Lx)
-        VX[cond] = -vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
-        cond = X == Lx
-        VX[cond] += +2 * vL
-        cond = Z <= thickness_sa_bc - self.fac_air
-        VX[cond] = 0
-
-        #The profile above is extensional, with the right boundary moving outwards (2*vL = velocity).
-        #It is changed according to the regime and the moving boundary:
         if(self.regime == 'compression'):
+            #Convergence with the opposite boundary fixed (VX = 0): the moving boundary pushes the lithosphere
+            #inwards (2*vL = velocity) down to h_v_const and all the inflow leaves through the same boundary in the
+            #return flow below it. The return flow takes the inflow of both boundaries of the extensional profile,
+            #so vR is doubled to keep the integral equal to zero.
+            vR = 2 * vR
+            x_bc = 0 if(self.moving_boundary == 'left') else Lx
+            cond = X == x_bc
+            VX[cond] = 2 * vL
+            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == x_bc)
+            VX[cond] -= vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
+            cond = Z <= thickness_sa_bc - self.fac_air
+            VX[cond] = 0
+            if(self.moving_boundary == 'right'):
+                VX = -VX #the right boundary moves to the left
+        else:
+            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == 0)
+            VX[cond] = vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
+            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == Lx)
+            VX[cond] = -vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
+            cond = X == Lx
+            VX[cond] += +2 * vL
+            cond = Z <= thickness_sa_bc - self.fac_air
+            VX[cond] = 0
+
+            #The profile above is extensional, with the right boundary moving outwards (2*vL = velocity).
+            #With the left moving boundary it is mirrored (in accordion, scale_bcv.txt reverses it in time):
             if(self.moving_boundary == 'left'):
-                VX = VX[:, ::-1] #mirror: the left boundary moves to the right, pushing the lithosphere inwards
-            else:
-                VX = -VX #reverse: the right boundary moves to the left
-        elif(self.moving_boundary == 'left'):
-            VX = -VX[:, ::-1] #extension with the left boundary moving outwards (to the left)
+                VX = -VX[:, ::-1] #extension with the left boundary moving outwards (to the left)
 
         #vertical velocity at the top to balance the inflow of the discrete boundaries
         v0 = VX[(X == 0)]
