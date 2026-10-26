@@ -21,3 +21,8 @@ dependencies:
   - h5netcdf
   - dask
   - svgelements
+  # documentation
+  - sphinx
+  - myst-parser
+  - sphinx_rtd_theme
+  - linkify-it-py
