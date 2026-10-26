@@ -1302,6 +1302,11 @@ class SVGScenario:
                 axv.set_xlim([-vmax, vmax])
                 for side in ['left', 'right', 'bottom'] + (['top'] if(title is None) else []):
                     axv.spines[side].set_visible(False)
+            #the hatches of the left boundary go beyond the domain where VX < 0 (clipped by the inset): the y label
+            #(its right side is at the given x) is 0.5% of the width to the left of them
+            vmin_left = max(-self.VX[:, 0].min() * scale, 0.0)
+            hatch_left = (1 - fac) * min(vmin_left / vmax, 1.0)
+            axs.yaxis.set_label_coords(-hatch_left - 0.005, 0.5)
 
         fig.savefig(fname, bbox_inches="tight", dpi=300)
         plt.close(fig)
