@@ -20,6 +20,10 @@ tapioca-svg rifting.svg -o inputs
 
 The settings of the SVG can be changed on the command line, e.g. `tapioca-svg accordion.svg --quiescence-time 300 --dx 1 --dz 1`.
 
+In rifting and accordion, `--moving-boundary symmetric` puts the reference frame at the centre of the domain:
+both boundaries move outwards with half of the velocity, e.g. `tapioca-svg rifting.svg -o inputs --moving-boundary symmetric`.
+In compression, the opposite boundary of the moving one is fixed.
+
 The `rifting` and `quiescence` SVGs have the line `preset_initial_temperature = ../preliminary` commented
 out: uncomment it (or use `--preset-initial-temperature`) with the folder of a preliminary scenario to start
 from its final thermal state instead of the conductive model.
