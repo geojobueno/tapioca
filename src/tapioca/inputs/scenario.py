@@ -2,7 +2,7 @@
 Builder of the input files of a Mandyoc scenario drawn in an SVG file.
 
 The geometry and the materials come from the SVG (see tapioca.inputs.svg). The shape
-labelled "domain" gives the domain, the resolution and, optionally, the numerical
+labelled "setup" gives the domain, the resolution and, optionally, the numerical
 experiment:
 
     Lx = 1600 km
@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 from .materials import MandyocLayer, Basalt
-from .svg import SVGInputError, read_domain, layers_from_svg, write_interfaces, points_from_spacing
+from .svg import SVGInputError, SETUP_LABEL, read_domain, layers_from_svg, write_interfaces, points_from_spacing
 
 __all__ = ["SVGScenario", "REGIMES"]
 
@@ -347,7 +347,7 @@ class SVGScenario:
     Mandyoc scenario drawn in an SVG file.
 
     The geometry, the materials and the domain come from the SVG (see tapioca.inputs.svg). The settings
-    of the numerical experiment are taken from the arguments, then from the description of the domain
+    of the numerical experiment are taken from the arguments, then from the description of the setup
     shape of the SVG and finally from the defaults below.
 
     Parameters
@@ -429,8 +429,8 @@ class SVGScenario:
 
         domain = read_domain(svg_file)
         if(domain is None):
-            raise SVGInputError(f"No shape labelled 'domain' in {svg_file}. Draw a rectangle over the model domain, "
-                                "label it 'domain' and write Lx, Lz, dx and dz in its description.")
+            raise SVGInputError(f"No shape labelled '{SETUP_LABEL}' in {svg_file}. Draw a rectangle over the model domain, "
+                                f"label it '{SETUP_LABEL}' and write Lx, Lz, dx and dz in its description.")
 
         #domain and resolution
         self.Lx, self.Lz = domain['Lx'], domain['Lz']
@@ -451,7 +451,7 @@ class SVGScenario:
         #layers
         self.asthenosphere_label = asthenosphere_label
         self.seed_label = seed_label
-        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, verbose=verbose)
+        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, domain_id=domain['id'], verbose=verbose)
         if(self.layers[-1].rheology_name != 'air'):
             raise SVGInputError(f"The top layer of {svg_file} must be the sticky air (found '{self.layers[-1].layer_label}').")
         if(len(layer_indices(self.layers, asthenosphere_label)) == 0):

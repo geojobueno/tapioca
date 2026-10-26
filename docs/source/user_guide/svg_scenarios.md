@@ -69,7 +69,8 @@ The drawing does not need to be in vertical scale: `h` gives the reference thick
 
 ## Domain and numerical experiment
 
-A shape labelled `domain` (e.g. a rectangle without fill in its own Inkscape layer) gives the model domain:
+A shape labelled `setup` (e.g. a rectangle without fill in its own Inkscape layer, named `domain` in the
+examples, with the units in the layer `lithologies`) gives the model domain:
 its bounding box is mapped to the domain and its description gives the dimensions, the resolution and,
 optionally, the numerical experiment:
 
@@ -88,6 +89,8 @@ magmatism_extraction = off
 magmatism_Ts0 = 1080
 preset_initial_temperature = ../preliminary
 ```
+
+Older SVGs with the shape labelled `domain` instead of `setup` are still read, with a warning.
 
 Every setting can also be given to `SVGScenario` or on the command line (e.g. `--regime`, `--dx`), which
 overrides the SVG. Defaults:

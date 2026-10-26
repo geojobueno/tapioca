@@ -2,7 +2,8 @@
 
 One example of each numerical experiment of `tapioca.inputs.SVGScenario`. Open the SVGs in Inkscape
 (*Object > Object Properties*) to see the label, title and description of each unit, and the description of
-the `domain` rectangle (in the `dominio` layer) with the domain, the resolution and the experiment.
+the `setup` rectangle (in the `domain` layer) with the domain, the resolution and the experiment. The units
+are in the `lithologies` layer.
 
 | Folder | Scenario | Experiment |
 |---|---|---|

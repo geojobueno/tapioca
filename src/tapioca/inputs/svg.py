@@ -38,8 +38,8 @@ to be written once. A shape without description inherits the one of the group
 (e.g. an Inkscape layer) that contains it. Shapes without any description are
 ignored (annotations, arrows, ...). The fill colour is used only in the plot.
 
-Domain: a shape labelled "domain" (usually a rectangle without fill, e.g. in its
-own Inkscape layer) gives the model domain. Its bounding box is mapped to the
+Domain: a shape labelled "setup" (usually a rectangle without fill, e.g. in its
+own Inkscape layer named "domain") gives the model domain. Its bounding box is mapped to the
 domain, top-left corner = (x=0, z=0), bottom-right = (Lx, -Lz), and its
 description gives the dimensions and the resolution of the Mandyoc grid:
 
@@ -56,7 +56,8 @@ quiescence_time (e.g. 300 Myr), magmatism (on or off), magmatism_extraction (on 
 magmatism_Ts0 (e.g. 1080, in oC) and preset_initial_temperature (folder or .nc file of a
 preliminary scenario whose final thermal state is used as initial temperature).
 
-Without a domain shape the SVG page is the domain and Lx, Lz, Nx must be given.
+Older SVGs with the shape labelled "domain" are still read (with a warning).
+Without a setup shape the SVG page is the domain and Lx, Lz, Nx must be given.
 x and z are scaled independently, so the drawing may be vertically
 exaggerated. Shapes are painted in document order (later shapes cover earlier
 ones), as Inkscape renders them.
@@ -99,7 +100,7 @@ import svgelements as se
 from .materials import MandyocLayer, get_rheology
 
 __all__ = ["SVGInputError", "read_domain", "read_units", "layers_from_svg", "write_interfaces",
-           "plot_layers", "points_from_spacing", "EXPERIMENT_KEYS", "DOMAIN_LABEL"]
+           "plot_layers", "points_from_spacing", "EXPERIMENT_KEYS", "SETUP_LABEL"]
 
 
 class SVGInputError(ValueError):
@@ -108,7 +109,8 @@ class SVGInputError(ValueError):
 SVG_NS = "{http://www.w3.org/2000/svg}"
 INKSCAPE_LABEL = "{http://www.inkscape.org/namespaces/inkscape}label"
 SHAPE_TAGS = {"rect", "path", "circle", "ellipse", "polygon", "polyline"}
-DOMAIN_LABEL = "domain"  # label (or id) of the shape that gives the model domain
+SETUP_LABEL = "setup"  # label (or id) of the shape that gives the model domain, the resolution and the experiment
+LEGACY_SETUP_LABEL = "domain"  # label of the setup shape in older SVGs, still read with a warning
 EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiescence_time",
                    "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature")  # settings of the experiment in the domain description
 
@@ -179,23 +181,36 @@ def points_from_spacing(length, spacing, name):
     return int(round(intervals)) + 1
 
 
+def is_setup_shape(el, label=None):
+    '''True if el is a shape labelled (or with id) label, by default the setup shape of new or older SVGs.'''
+    labels = (label,) if label else (SETUP_LABEL, LEGACY_SETUP_LABEL)
+    return (el.tag.replace(SVG_NS, "") in SHAPE_TAGS
+            and any(lb in labels for lb in (el.get(INKSCAPE_LABEL), el.get("id"))))
+
+
 def read_domain(svg_file):
     '''
-    Read the shape labelled "domain" (see the module docstring).
-    Return dict(id, Lx, Lz, Nx, Nz, experiment) with lengths in m, or None if the SVG has no domain shape.
+    Read the shape labelled "setup" (see the module docstring), or "domain" in older SVGs.
+    Return dict(id, Lx, Lz, Nx, Nz, experiment) with lengths in m, or None if the SVG has no setup shape.
     experiment is a dict with the settings of the numerical experiment given in the description (as text).
     '''
     root = ET.parse(svg_file).getroot()
-    shapes = [el for el in root.iter() if el.tag.replace(SVG_NS, "") in SHAPE_TAGS
-              and DOMAIN_LABEL in (el.get(INKSCAPE_LABEL), el.get("id"))]
+    label = SETUP_LABEL
+    shapes = [el for el in root.iter() if is_setup_shape(el, label)]
+    if not shapes:
+        label = LEGACY_SETUP_LABEL
+        shapes = [el for el in root.iter() if is_setup_shape(el, label)]
+        if shapes:
+            print(f"Warning: the shape labelled '{LEGACY_SETUP_LABEL}' in {svg_file} is read as the setup shape; "
+                  f"rename it to '{SETUP_LABEL}'.")
     if not shapes:
         return None
     if len(shapes) > 1:
-        raise SVGInputError(f"The SVG has {len(shapes)} shapes labelled '{DOMAIN_LABEL}'; keep only one.")
+        raise SVGInputError(f"The SVG has {len(shapes)} shapes labelled '{label}'; keep only one.")
     el = shapes[0]
-    where = f"Domain shape (id={el.get('id')})"
+    where = f"Setup shape (id={el.get('id')})"
     if el.get("id") is None:
-        raise SVGInputError(f"{where}: the domain shape has no id. Save the file with Inkscape to create it.")
+        raise SVGInputError(f"{where}: the setup shape has no id. Save the file with Inkscape to create it.")
     desc = el.find(SVG_NS + "desc")
     if desc is None or not (desc.text or "").strip():
         raise SVGInputError(f"{where}: write Lx, Lz and the resolution (dx and dz, or Nx and Nz) in its description.")
@@ -296,7 +311,7 @@ def read_units(svg_file):
     pending = []  # shapes with a label but no description of their own
 
     for el in root.iter():
-        if el.tag.replace(SVG_NS, "") not in SHAPE_TAGS or DOMAIN_LABEL in (el.get(INKSCAPE_LABEL), el.get("id")):
+        if el.tag.replace(SVG_NS, "") not in SHAPE_TAGS or is_setup_shape(el):
             continue
         # nearest element (itself or a group above it) with a description
         node = el
@@ -589,7 +604,7 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True
     '''
     Read the SVG and return the list of MandyocLayer (bottom to top) with their
     interfaces (base depth, m) set. Lx, Lz and dz in m.
-    The region mapped to the domain is the shape labelled "domain" if there is one,
+    The region mapped to the domain is the shape labelled "setup" if there is one,
     the element domain_id if given, or else the page.
 
     Parameters
@@ -605,7 +620,7 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True
     dz : float, optional
         Vertical grid spacing in meters. Default is 100.0.
     domain_id : str, optional
-        ID of the SVG element to use as the domain. If None, the shape labelled "domain" is used if present, otherwise the entire page is used. Default is None.
+        ID of the SVG element to use as the domain. If None, the shape labelled "setup" is used if present, otherwise the entire page is used. Default is None.
     verbose : bool, optional
         If True, print information about the layers and scaling. Default is True.
     '''
@@ -723,12 +738,12 @@ def main():
 def _main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("svg", help="SVG file with the scenario")
-    parser.add_argument("--Lx", type=float, help="domain width [km] (default: from the domain shape)")
-    parser.add_argument("--Lz", type=float, help="domain depth [km] (default: from the domain shape)")
-    parser.add_argument("--dx", type=float, help="horizontal resolution [km] (default: from the domain shape)")
+    parser.add_argument("--Lx", type=float, help="domain width [km] (default: from the setup shape)")
+    parser.add_argument("--Lz", type=float, help="domain depth [km] (default: from the setup shape)")
+    parser.add_argument("--dx", type=float, help="horizontal resolution [km] (default: from the setup shape)")
     parser.add_argument("--Nx", type=int, help="number of points in x (alternative to --dx)")
     parser.add_argument("--sampling", type=float, default=0.1, help="vertical sampling to locate the interfaces [km] (default 0.1)")
-    parser.add_argument("--domain-id", help="id of an element whose bounding box is the domain (default: the shape labelled 'domain', or the page)")
+    parser.add_argument("--domain-id", help="id of an element whose bounding box is the domain (default: the shape labelled 'setup', or the page)")
     parser.add_argument("-o", "--output", default="interfaces.txt")
     parser.add_argument("--plot", help="save a figure of the resulting layers (e.g. numerical_setup.png)")
     args = parser.parse_args()
@@ -737,7 +752,7 @@ def _main():
     Lx = args.Lx * 1.0e3 if args.Lx else domain.get("Lx")
     Lz = args.Lz * 1.0e3 if args.Lz else domain.get("Lz")
     if Lx is None or Lz is None:
-        raise SVGInputError(f"No shape labelled '{DOMAIN_LABEL}' in the SVG: give --Lx and --Lz (and --dx or --Nx).")
+        raise SVGInputError(f"No shape labelled '{SETUP_LABEL}' in the SVG: give --Lx and --Lz (and --dx or --Nx).")
     if args.dx:
         Nx = points_from_spacing(Lx, args.dx * 1.0e3, "dx")
     else:
