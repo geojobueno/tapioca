@@ -29,7 +29,7 @@ Example
     scenario.write_all("my_scenario")
 '''
 
-import os, re, glob, shutil
+import os, re, glob, shutil, platform
 
 import numpy as np
 import xarray as xr
@@ -44,6 +44,111 @@ __all__ = ["SVGScenario", "REGIMES"]
 REGIMES = ['rifting', 'compression', 'accordion', 'quiescence']
 SEC_PER_YEAR = 365 * 24 * 3600
 MANTLE_RHEOLOGIES = ['wet_olivine', 'dry_olivine']
+SYSTEMS = ['linux', 'mac']
+
+#Script of tapioca that moves the outputs of Mandyoc to one folder per variable (copied to the scenario)
+ORGANIZE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'postrunning', '0_organize_outputs.sh')
+
+#Run script of Mandyoc (@KEY@ are replaced in write_scripts). PETSC_DIR, PETSC_ARCH and MANDYOC
+#set in the environment override the values of the script.
+RUN_SCRIPT = '''#!/usr/bin/env bash
+# Runs Mandyoc and moves the outputs to one folder per variable (0_organize_outputs.sh). Created by tapioca.
+# PETSC_DIR, PETSC_ARCH and MANDYOC set in the environment override the values below.
+
+PETSC_DIR=${PETSC_DIR:-@PETSC_DIR@}
+PETSC_ARCH=${PETSC_ARCH-@PETSC_ARCH@}
+MANDYOC=${MANDYOC:-@MANDYOC@}
+NUMBER_OF_CORES=@NCORES@
+MANDYOC_OPTIONS="@MANDYOC_OPTIONS@"
+
+touch FD.out
+@LAUNCHER@$PETSC_DIR/$PETSC_ARCH/bin/mpirun -n $NUMBER_OF_CORES $MANDYOC $MANDYOC_OPTIONS | tee FD.out
+
+# Moves the outputs to one folder per variable
+bash 0_organize_outputs.sh
+
+# Zips the inputs and the outputs (skips the files already in the zip)
+# bash zipper.sh
+'''
+
+#caffeinate keeps the Mac awake while Mandyoc runs
+RUN_LAUNCHER = {'linux': '', 'mac': 'caffeinate -i '}
+
+#Zips the scenario in <folder>.zip, skipping the files already in the zip. The outputs are in the
+#folders created by 0_organize_outputs.sh.
+ZIP_SCRIPT = '''#!/usr/bin/env bash
+# Zips the files of Mandyoc in $DIRNAME.zip, skipping the files already in the zip. Created by tapioca.
+set -eo pipefail
+
+DIRNAME=${DIRNAME:-$(basename "$PWD")}
+ZIP="${DIRNAME:?DIRNAME is not set}.zip"
+
+# Patterns: files or folders (the folders are zipped with all their files)
+patterns=(
+"interfaces.txt"
+"param.txt"
+"input*_0.txt"
+"vel_bc.txt"
+"velz_bc.txt"
+"scale_bcv.txt"
+"infos_*.txt"
+"*.svg"
+"run*.sh"
+"bc_velocity_*.txt"
+"sp_surface_global_*.txt"
+"FD.out"
+"density"
+"heat"
+"pressure"
+"surface"
+"lithos"
+"strain"
+"strain_rate"
+"temperature"
+"time"
+"velocity"
+"viscosity"
+"thermal_diffusivity"
+"steps"
+"Phi"
+"dPhi"
+"X_depletion"
+"*.bin*.txt"
+"bc*-1.txt"
+"*.log"
+# "_*.nc"
+)
+
+export LC_ALL=C   # same order for comm
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Files that match the patterns; in the folders, all their files
+# (find avoids the "argument list too long" error)
+for pat in "${patterns[@]}"; do
+    find . -maxdepth 1 -name "$pat" ! -name "$ZIP" -exec find {} -type f \\;
+done | sed 's|^\\./||' | sort -u > "$tmp/all"
+
+# Files already in the zip
+if [[ -f "$ZIP" ]]; then
+    zipinfo -1 "$ZIP" | sort -u > "$tmp/zipped"
+    grow=-g   # appends to the zip without rewriting it
+else
+    : > "$tmp/zipped"
+    grow=
+fi
+
+# Only the files that are not in the zip yet
+comm -23 "$tmp/all" "$tmp/zipped" > "$tmp/new"
+n=$(wc -l < "$tmp/new" | tr -d ' ')
+
+if [[ "$n" -eq 0 ]]; then
+    echo "No new files for $ZIP"
+else
+    echo "Adding $n file(s) to $ZIP"
+    zip -q $grow "$ZIP" -@ < "$tmp/new"
+fi
+'''
 
 ###############################################################################
 # Auxiliary functions
@@ -791,11 +896,81 @@ class SVGScenario:
     # Writing the files
     ###########################################################################
 
-    def write_all(self, output_dir='.', plots=True, copy_svg=True, **params):
+    def write_scripts(self, output_dir='.', system=None, ncores=None, mandyoc_options='',
+                      petsc_dir=None, petsc_arch=None, mandyoc=None):
+        '''
+        Write the scripts of the scenario in output_dir:
+          - run_linux.sh or run_mac.sh: runs Mandyoc with mpirun of PETSc and then moves the outputs to one
+            folder per variable with 0_organize_outputs.sh (on the Mac, caffeinate keeps it awake);
+          - 0_organize_outputs.sh: copy of src/postrunning/0_organize_outputs.sh;
+          - zipper.sh: zips the scenario in <folder>.zip, skipping the files already in the zip.
+
+        Parameters
+        ----------
+        system : str, optional
+            'linux' or 'mac'. Default: the system that runs tapioca.
+        ncores : int, optional
+            Number of MPI processes. Default: number of cores of this computer.
+        mandyoc_options : str, optional
+            Command line options of Mandyoc (e.g. '-seed 0,5,8 -strain_seed 0.0,1.0,1.0').
+        petsc_dir, petsc_arch, mandyoc : str, optional
+            PETSc folder and architecture (mpirun is $PETSC_DIR/$PETSC_ARCH/bin/mpirun) and the Mandyoc
+            executable. Default: PETSC_DIR and PETSC_ARCH of the environment, or $HOME/opt/petsc and the
+            only arch-* folder in it with mpirun (arch-label-optimized if there is none or more than one),
+            and $HOME/opt/mandyoc/bin/mandyoc. Values set in the environment when the script runs override them.
+        '''
+        this_system = {'Linux': 'linux', 'Darwin': 'mac'}.get(platform.system())
+        if(system is None):
+            if(this_system is None):
+                raise SVGInputError(f"Run scripts are written for {' or '.join(SYSTEMS)}; give system "
+                                    f"(this computer is {platform.system()}).")
+            system = this_system
+        if(system not in SYSTEMS):
+            raise SVGInputError(f"Unknown system '{system}'; use {' or '.join(SYSTEMS)}.")
+        if(not os.path.isfile(ORGANIZE_SCRIPT)):
+            raise SVGInputError(f"0_organize_outputs.sh not found in {os.path.dirname(os.path.abspath(ORGANIZE_SCRIPT))}.")
+
+        if(petsc_dir is None):
+            petsc_dir = os.environ.get('PETSC_DIR', '$HOME/opt/petsc')
+        if(petsc_arch is None):
+            petsc_arch = os.environ.get('PETSC_ARCH')
+        if(petsc_arch is None):
+            #the arch of $HOME/opt/petsc, only if the script is for this computer
+            archs = glob.glob(os.path.join(os.path.expanduser('~'), 'opt', 'petsc', 'arch-*', 'bin', 'mpirun'))
+            petsc_arch = (archs[0].split(os.sep)[-3] if(system == this_system and len(archs) == 1)
+                          else 'arch-label-optimized')
+        if(mandyoc is None):
+            mandyoc = '$HOME/opt/mandyoc/bin/mandyoc'
+        if(ncores is None):
+            ncores = os.cpu_count() or 1
+
+        os.makedirs(output_dir, exist_ok=True)
+        path = lambda fname: os.path.join(output_dir, fname)
+
+        run = RUN_SCRIPT
+        for key, value in [('PETSC_DIR', petsc_dir), ('PETSC_ARCH', petsc_arch), ('MANDYOC', mandyoc),
+                           ('NCORES', int(ncores)), ('MANDYOC_OPTIONS', mandyoc_options),
+                           ('LAUNCHER', RUN_LAUNCHER[system])]:
+            run = run.replace(f'@{key}@', str(value))
+        scripts = {f'run_{system}.sh': run, 'zipper.sh': ZIP_SCRIPT}
+        with open(ORGANIZE_SCRIPT) as f:
+            scripts['0_organize_outputs.sh'] = f.read()
+
+        for fname, text in scripts.items():
+            with open(path(fname), 'w') as f:
+                f.write(text)
+            os.chmod(path(fname), 0o755)
+        if(self.verbose):
+            print(f"Scripts: {', '.join(scripts)} ({system}, {int(ncores)} cores)")
+
+    def write_all(self, output_dir='.', plots=True, copy_svg=True, scripts=True, system=None, ncores=None,
+                  mandyoc_options='', **params):
         '''
         Write the input files of Mandyoc in output_dir: interfaces.txt, param.txt, input_temperature_0.txt,
         input_velocity_0.txt, vel_bc.txt, velz_bc.txt and scale_bcv.txt (accordion), the scenario infos
         (infos_<folder>.txt), a copy of the SVG and the figures numerical_setup.png and initial_temperature.png.
+        With scripts, also the run script of Mandyoc for system ('linux' or 'mac'), 0_organize_outputs.sh and
+        zipper.sh (see write_scripts).
         Keyword arguments change parameters of param.txt (see param_text).
         '''
         os.makedirs(output_dir, exist_ok=True)
@@ -826,6 +1001,9 @@ class SVGScenario:
             np.savetxt(path("input_velocity_0.txt"), np.reshape(v.T, (np.size(v))), header="v1\nv2\nv3\nv4")
             if(self.variable_bcv):
                 _write_clean(path("scale_bcv.txt"), self.scale_bcv())
+
+        if(scripts):
+            self.write_scripts(output_dir, system=system, ncores=ncores, mandyoc_options=mandyoc_options)
 
         if(plots):
             self.plot_temperature(path('initial_temperature.png'))

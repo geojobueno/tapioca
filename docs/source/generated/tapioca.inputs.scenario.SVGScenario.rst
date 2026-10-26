@@ -22,6 +22,7 @@
       ~SVGScenario.plot_temperature
       ~SVGScenario.scale_bcv
       ~SVGScenario.write_all
+      ~SVGScenario.write_scripts
       ~SVGScenario.yield_strength_envelope
    
    

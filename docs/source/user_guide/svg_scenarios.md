@@ -19,6 +19,17 @@ The output folder receives `interfaces.txt`, `param.txt`, `input_temperature_0.t
 a copy of the SVG and the figures `numerical_setup.png` and `initial_temperature.png`.
 Examples are in `examples/svg_scenarios`.
 
+It also receives the scripts to run the scenario (`--no-scripts` skips them):
+
+- `run_linux.sh` or `run_mac.sh` (`--system`, default: the system that runs tapioca): runs Mandyoc with
+  `$PETSC_DIR/$PETSC_ARCH/bin/mpirun` and then moves the outputs to one folder per variable with
+  `0_organize_outputs.sh`. On the Mac, `caffeinate` keeps the computer awake during the run. `PETSC_DIR`,
+  `PETSC_ARCH` and `MANDYOC` (the executable) set in the environment override the values of the script;
+  `--ncores` and `--mandyoc-options` set the number of MPI processes and the options of Mandyoc;
+- `0_organize_outputs.sh`: copy of `src/postrunning/0_organize_outputs.sh`;
+- `zipper.sh`: zips the inputs and the outputs in `<folder>.zip`, skipping the files already in the zip,
+  so it can be run again to add new outputs.
+
 ## Units of rock
 
 Each filled shape is a body of rock described by its object properties (Inkscape: *Object > Object Properties*):

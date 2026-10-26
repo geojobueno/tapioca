@@ -43,6 +43,7 @@ for prefix in "${prefixes[@]}"; do
 done
 
 # Handle the special cases using the same reusable function
+move_files "sp_surface_global*.txt" "surface"
 move_files "litho*.txt" "lithos"
 move_files "step*.txt" "steps"
 

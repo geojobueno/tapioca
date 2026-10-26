@@ -20,6 +20,7 @@ the input files and figures. The source code is in `inputs/scenario.py`.
 
    SVGScenario
    SVGScenario.write_all
+   SVGScenario.write_scripts
    SVGScenario.build_temperature
    SVGScenario.build_velocity
    SVGScenario.param_text
@@ -43,6 +44,12 @@ scenario.write_all("my_scenario", particles_per_element=100)  # keyword argument
 The same from the command line (installed with the package):
 ```bash
 tapioca-svg rifting.svg -o my_scenario --regime accordion --quiescence-time 300
+```
+
+The run script of Mandyoc is written for the system that runs tapioca (`run_linux.sh` or `run_mac.sh`).
+Another system, the number of MPI processes and the options of Mandyoc may be given:
+```bash
+tapioca-svg rifting.svg -o my_scenario --system linux --ncores 20 --mandyoc-options="-seed 0,5,8 -strain_seed 0.0,1.0,1.0"
 ```
 
 ---
