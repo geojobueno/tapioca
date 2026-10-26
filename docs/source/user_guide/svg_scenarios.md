@@ -95,8 +95,8 @@ overrides the SVG. Defaults:
 | Setting | Default | |
 |---|---|---|
 | `regime` | `rifting` | `rifting` (extension), `compression` (convergence), `accordion` or `quiescence` |
-| `velocity` | 1 cm/yr | velocity of the moving boundary |
-| `moving_boundary` | `right` | `left` or `right` |
+| `velocity` | 1 cm/yr | velocity of the moving boundary (with `symmetric`, the sum of both boundaries) |
+| `moving_boundary` | `right` | `left`, `right` or `symmetric` (rifting and accordion) |
 | `quiescence_time` | 0 Myr | accordion and quiescence regimes |
 | `time_max` | 60 Myr | rifting and compression; accordion: end of the second extension; quiescence: `quiescence_time` (or 1000 Myr) |
 | `magmatism`, `magmatism_extraction` | `off` | with both `on`, a basalt layer receives the extracted melt |
@@ -108,7 +108,11 @@ extension until 25 Myr, convergence until 75 Myr, quiescence during `quiescence_
 
 In the rifting and accordion regimes, the velocity is constant from the surface down to 20 km below the
 thickest lithosphere of the domain; in the compression regime, down to 20 km below the lithosphere at the
-moving boundary (e.g. an oceanic plate pushed towards a continent).
+moving boundary (e.g. an oceanic plate pushed towards a continent), and the opposite boundary is fixed.
+
+With `moving_boundary = symmetric` (rifting and accordion), the reference frame is at the centre of the
+domain: both boundaries move outwards with `velocity`/2, each with its own return flow below the constant
+velocity, so that the integral of the inflow is zero on each boundary.
 
 ## Initial temperature
 

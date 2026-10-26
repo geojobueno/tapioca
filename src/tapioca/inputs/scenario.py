@@ -11,7 +11,7 @@ experiment:
     dz = 2 km
     regime = accordion                         (rifting, compression, accordion, quiescence)
     velocity = 1 cm/yr
-    moving_boundary = right                    (left or right)
+    moving_boundary = right                    (left, right or symmetric)
     quiescence_time = 300 Myr
     time_max = 500 Myr
     magmatism = off
@@ -361,9 +361,11 @@ class SVGScenario:
         quiescence and extension again, as in M300) or 'quiescence' (no velocity at the boundaries).
         Default: rifting.
     velocity : float, optional
-        Velocity at the moving boundary [cm/yr]. Default: 1 cm/yr.
+        Velocity at the moving boundary [cm/yr] (with symmetric, the sum of the velocities of both boundaries).
+        Default: 1 cm/yr.
     moving_boundary : str, optional
-        'left' or 'right'. Default: right.
+        'left', 'right' or 'symmetric' (rifting and accordion: both boundaries move with velocity/2 and the
+        reference frame is at the centre of the domain). Default: right.
     quiescence_time : float, optional
         Duration of the quiescence [Myr] in the accordion and quiescence regimes. Default: 0 Myr.
     time_max : float, optional
@@ -525,8 +527,10 @@ class SVGScenario:
             self.velocity = parse_number_with_unit(self.velocity, {'cm/yr': 1.0, 'cm/y': 1.0, 'mm/yr': 0.1, 'mm/y': 0.1}, 'velocity')
 
         self.moving_boundary = str(self._setting('moving_boundary', moving_boundary, 'right')).strip().lower()
-        if(self.moving_boundary not in ['left', 'right']):
-            raise SVGInputError(f"Unknown moving_boundary '{self.moving_boundary}'. Use left or right.")
+        if(self.moving_boundary not in ['left', 'right', 'symmetric']):
+            raise SVGInputError(f"Unknown moving_boundary '{self.moving_boundary}'. Use left, right or symmetric.")
+        if(self.moving_boundary == 'symmetric' and self.regime == 'compression'):
+            raise SVGInputError("moving_boundary = symmetric is only available in the rifting and accordion regimes.")
 
         time_max = self._setting('time_max', time_max, None) #Myr
         if(isinstance(time_max, str)):
@@ -703,7 +707,8 @@ class SVGScenario:
         Constant velocity down to h_v_const below the surface (reference thickness + 20 km, where the lithosphere
         is thickest in rifting and accordion, as in M300, and at the moving boundary in compression) and the return
         flow below it, so that the integral of the inflow is zero. In compression the return flow leaves through the
-        moving boundary and the opposite boundary is fixed (VX = 0).
+        moving boundary and the opposite boundary is fixed (VX = 0). With moving_boundary = symmetric (rifting and
+        accordion), both boundaries move outwards with velocity/2, each with its own return flow.
         '''
         if(not self.velocity_from_ascii):
             self.VX, self.VZ = None, None
@@ -740,6 +745,20 @@ class SVGScenario:
             VX[cond] = 0
             if(self.moving_boundary == 'right'):
                 VX = -VX #the right boundary moves to the left
+        elif(self.moving_boundary == 'symmetric'):
+            #Extension with the reference frame at the centre of the domain: each boundary moves outwards with
+            #vL (2*vL = velocity) down to h_v_const and has its own return flow below it (inflow), with ha and vR
+            #of its own sticky air thickness, so that the integral is zero on each boundary.
+            for x_bc, idx, sign in ((0, 0, -1), (Lx, Nx - 1, +1)):
+                sa_bc = self.thickness_sa[idx]
+                ha_bc = Lz - sa_bc - self.h_v_const
+                vR_bc = 2 * vL * (self.h_v_const + self.fac_air + ha_bc) / ha_bc
+                column = X == x_bc
+                VX[column] = vL
+                cond = column & (Z > self.h_v_const + sa_bc)
+                VX[cond] -= vR_bc * (Z[cond] - self.h_v_const - sa_bc) / ha_bc
+                VX[column & (Z <= sa_bc - self.fac_air)] = 0
+                VX[column] *= sign
         else:
             cond = (Z > self.h_v_const + thickness_sa_bc) & (X == 0)
             VX[cond] = vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
