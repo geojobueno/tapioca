@@ -47,6 +47,7 @@ description gives the dimensions and the resolution of the Mandyoc grid:
                      Lz = 400 km
                      dx = 2 km        (or Nx = 801)
                      dz = 2 km        (or Nz = 201)
+                     min_thickness = 1 km   (optional, see remove_slivers; 0 km keeps the slivers)
 
 It may also give the settings of the numerical experiment, which are returned
 as text in domain["experiment"] and read by the
@@ -60,14 +61,19 @@ Older SVGs with the shape labelled "domain" are still read (with a warning).
 Without a setup shape the SVG page is the domain and Lx, Lz, Nx must be given.
 x and z are scaled independently, so the drawing may be vertically
 exaggerated. Shapes are painted in document order (later shapes cover earlier
-ones), as Inkscape renders them.
+ones), as Inkscape renders them. Points not covered by any shape take the unit
+of the nearest covered point (see fill_gaps), and thin layers left by shapes
+that overlap a little are removed (see remove_slivers), with warnings.
 
 Since Mandyoc layers are bounded by single-valued interfaces z(x), the script
 reads, for every column x, the sequence of units from bottom to top and finds a
 single ordered stack containing all of them (shortest common supersequence).
 Units absent in a column get zero thickness there. A seed inside the lower
-crust becomes [..., lower crust, seed, lower crust, ...]. Each slot of the stack
-is a MandyocLayer whose interface is the depth of its base.
+crust becomes [..., lower crust, seed, lower crust, ...]; away from the seed its
+two interfaces stay at the depth of the top of the seed, so that Mandyoc, which
+interpolates the interfaces between the columns, draws the seed as a box and not
+as a funnel up to the top of the lower crust. Each slot of the stack is a
+MandyocLayer whose interface is the depth of its base.
 
 Usage
 -----
@@ -111,6 +117,7 @@ INKSCAPE_LABEL = "{http://www.inkscape.org/namespaces/inkscape}label"
 SHAPE_TAGS = {"rect", "path", "circle", "ellipse", "polygon", "polyline"}
 SETUP_LABEL = "setup"  # label (or id) of the shape that gives the model domain, the resolution and the experiment
 LEGACY_SETUP_LABEL = "domain"  # label of the setup shape in older SVGs, still read with a warning
+MIN_THICKNESS = 1.0e3  # default min_thickness [m]: thinner pieces of units drawn thicker elsewhere are removed (see remove_slivers)
 EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiescence_time",
                    "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature")  # settings of the experiment in the domain description
 
@@ -191,7 +198,8 @@ def is_setup_shape(el, label=None):
 def read_domain(svg_file):
     '''
     Read the shape labelled "setup" (see the module docstring), or "domain" in older SVGs.
-    Return dict(id, Lx, Lz, Nx, Nz, experiment) with lengths in m, or None if the SVG has no setup shape.
+    Return dict(id, Lx, Lz, Nx, Nz, experiment and min_thickness if given) with lengths in m, or None if the
+    SVG has no setup shape.
     experiment is a dict with the settings of the numerical experiment given in the description (as text).
     '''
     root = ET.parse(svg_file).getroot()
@@ -223,7 +231,9 @@ def read_domain(svg_file):
         if "=" not in line:
             raise SVGInputError(f"{where}: unexpected line '{line}' in the description.")
         key, value = (s.strip() for s in line.split("=", 1))
-        if key in ("Lx", "Lz", "dx", "dz"):
+        if key == "min_thickness" and re.fullmatch(r"0*\.?0*\s*(km|m)?", value):
+            values[key] = 0.0  # keep the slivers
+        elif key in ("Lx", "Lz", "dx", "dz", "min_thickness"):
             values[key] = parse_thickness(value, where, key)
         elif key in ("Nx", "Nz"):
             try:
@@ -233,12 +243,14 @@ def read_domain(svg_file):
         elif key in EXPERIMENT_KEYS:
             experiment[key] = value
         else:
-            raise SVGInputError(f"{where}: unknown key '{key}'. Use Lx, Lz, dx, dz (or Nx, Nz) and {', '.join(EXPERIMENT_KEYS)}.")
+            raise SVGInputError(f"{where}: unknown key '{key}'. Use Lx, Lz, dx, dz (or Nx, Nz), min_thickness and {', '.join(EXPERIMENT_KEYS)}.")
 
     for key in ("Lx", "Lz"):
         if key not in values:
             raise SVGInputError(f"{where}: missing {key} in the description.")
     domain = dict(id=el.get("id"), Lx=values["Lx"], Lz=values["Lz"], experiment=experiment)
+    if "min_thickness" in values:
+        domain["min_thickness"] = values["min_thickness"]
     for d, N, L in (("dx", "Nx", "Lx"), ("dz", "Nz", "Lz")):
         if d in values:
             domain[N] = points_from_spacing(values[L], values[d], d)
@@ -452,6 +464,84 @@ def embed(seq, stack):
     return slots
 
 
+def nearest_covered(covered):
+    '''Index of the nearest True element of the 1D array covered for each element (ties: the lower index).'''
+    positions = np.nonzero(covered)[0]
+    j = np.arange(len(covered))
+    k = np.searchsorted(positions, j)
+    before = positions[np.clip(k - 1, 0, len(positions) - 1)]
+    after = positions[np.clip(k, 0, len(positions) - 1)]
+    return np.where(np.abs(j - before) <= np.abs(after - j), before, after)
+
+
+def fill_gaps(grid, under, dx, dz, verbose=True):
+    '''
+    Give each sample point not covered by any unit the unit of the nearest covered point: first along
+    its row (gaps between shapes and shapes that do not reach the sides of the domain, as the drawn
+    units are mostly horizontal), then along its column for the rows without any unit (strips at the
+    top or the bottom of the domain, or between two shapes along the whole domain).
+    Return grid and under filled and the largest distance filled [m].
+    '''
+    empty = grid < 0
+    if not empty.any():
+        return grid, under, 0.0
+    if empty.all():
+        raise SVGInputError("No sample point is covered by a unit: check that the shapes are inside the setup shape.")
+    z_idx, x_idx = np.indices(grid.shape)
+    rows = ~empty.all(axis=1)  # rows with at least one covered point
+    src_x = x_idx.copy()
+    for i in np.nonzero(rows)[0]:
+        src_x[i] = nearest_covered(~empty[i])
+    src_z = nearest_covered(rows)[z_idx]  # rows without units take the nearest row with units
+    src_x = src_x[src_z, x_idx]
+    distance = np.hypot((src_z - z_idx) * dz, (src_x - x_idx) * dx)
+    if verbose:
+        iz0, ix0 = np.argwhere(empty)[0]
+        print(f"Warning: {empty.sum()} sample points not covered by any unit (first one at column {ix0}, depth "
+              f"{(iz0 + 0.5) * dz / 1e3:.2f} km) took the unit of the nearest covered point, up to "
+              f"{distance.max() / 1e3:.2f} km away. Check the gaps between shapes if this is too far.")
+    return grid[src_z, src_x], under[src_z, src_x], distance.max()
+
+
+def remove_slivers(grid, under, dz, Lz, min_thickness, unit_names, verbose=True):
+    '''
+    Remove the thin layers left by shapes that overlap a little (e.g. a crust drawn a bit below the base
+    of the air leaves a thin layer of the mantle painted under it). A sliver is a layer of the stack (see
+    build_stack) thinner than min_thickness [m] in every column, when its unit has a thicker layer in the
+    stack: units thin everywhere (e.g. a decollement) and the thin ends of thick layers are kept.
+    The points of the slivers take the unit right below them (above them at the bottom of the domain).
+    Return grid and under without the slivers.
+    '''
+    if not min_thickness or min_thickness <= 0:
+        return grid, under
+    stack, unique, base = build_stack(grid, dz, Lz, unit_names)
+    top = np.vstack([base[1:], np.zeros(base.shape[1])])
+    thickness = (base - top).max(axis=1)  # largest thickness of each layer of the stack
+    thick_units = {u for u, t in zip(stack, thickness) if t >= min_thickness}
+    slivers = [k for k, (u, t) in enumerate(zip(stack, thickness)) if t < min_thickness and u in thick_units]
+    if not slivers:
+        return grid, under
+
+    zdepth = (np.arange(grid.shape[0]) + 0.5) * dz
+    slot = (zdepth[:, None, None] < base[None, 1:, :]).sum(axis=1)  # layer of the stack of each point
+    sliver = np.isin(slot, slivers)
+    removed = [(unit_names[stack[k]], np.nonzero(base[k] > top[k])[0], thickness[k]) for k in slivers]
+    removed = [(name, cols[0], cols[-1], t) for name, cols, t in removed]
+
+    grid, under = grid.copy(), under.copy()
+    for ix in np.nonzero(sliver.any(axis=0))[0]:
+        keep = np.nonzero(~sliver[:, ix])[0]
+        iz = np.nonzero(sliver[:, ix])[0]
+        k = np.searchsorted(keep, iz)
+        src = keep[np.minimum(k, len(keep) - 1)]  # first point below (larger depth), or the last one above
+        grid[iz, ix], under[iz, ix] = grid[src, ix], under[src, ix]
+    if verbose:
+        for name, c0, c1, t in removed:
+            print(f"Warning: removed a sliver of '{name}' (columns {c0}-{c1}, up to {t / 1e3:.2f} km thick, "
+                  f"thinner than min_thickness = {min_thickness / 1e3:g} km): it takes the unit below it.")
+    return grid, under
+
+
 def build_stack(grid, dz, Lz, unit_names):
     '''
     Return the stack of units (indices, bottom to top) and the base depth of each
@@ -490,6 +580,25 @@ def build_stack(grid, dz, Lz, unit_names):
             while r + 1 < len(slots) and slots[r + 1] < k:
                 r += 1
             base[k, ix] = tops[r] if r >= 0 else Lz
+
+    # Slots absent in a column lie at the top of the run below them. When that run is of the same unit as a
+    # slot above them (e.g. the lower crust split by a seed), the run is shared by both slots and the absent
+    # slots go to the depth of their top in the nearest column where they are present: the interfaces of a
+    # body continue flat around it, instead of rising to the top of the unit around it.
+    drawn = base.copy()
+    present = drawn > np.vstack([drawn[1:], np.zeros((1, Nx))])
+    for ix, (units, tops) in enumerate(columns):
+        slots = slots_of[units]
+        for r, a in enumerate(slots):
+            above = slots[r + 1] if r + 1 < len(slots) else len(stack)
+            b = next((k for k in range(a + 2, above) if stack[k] == stack[a]), None)
+            if b is None:
+                continue
+            cols = np.nonzero(present[a + 1:b].any(axis=0))[0]
+            if not cols.size:
+                continue
+            near = cols[np.argmin(np.abs(cols - ix))]
+            base[a + 1:b + 1, ix] = np.clip(drawn[b, near], tops[r], drawn[a, ix])  # inside the run
     return stack, unique, base
 
 
@@ -600,7 +709,7 @@ def rescale_thickness(stack, base, grid, under, unit_names, units, Lz, dz):
     return new_base, report
 
 
-def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True):
+def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, min_thickness=None, verbose=True):
     '''
     Read the SVG and return the list of MandyocLayer (bottom to top) with their
     interfaces (base depth, m) set. Lx, Lz and dz in m.
@@ -621,19 +730,28 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True
         Vertical grid spacing in meters. Default is 100.0.
     domain_id : str, optional
         ID of the SVG element to use as the domain. If None, the shape labelled "setup" is used if present, otherwise the entire page is used. Default is None.
+    min_thickness : float, optional
+        Thinner pieces of a unit that is thicker elsewhere are removed, in meters (see remove_slivers;
+        0 keeps them). If None, min_thickness of the setup shape, or MIN_THICKNESS (1 km). Default is None.
     verbose : bool, optional
         If True, print information about the layers and scaling. Default is True.
     '''
-    if domain_id is None:
+    if domain_id is None or min_thickness is None:
         domain = read_domain(svg_file)
         if domain is not None:
-            domain_id = domain["id"]
+            domain_id = domain_id or domain["id"]
+            if min_thickness is None:
+                min_thickness = domain.get("min_thickness")
+    if min_thickness is None:
+        min_thickness = MIN_THICKNESS
     shape_unit, units = read_units(svg_file)
     if not units:
         raise SVGInputError("No shape with description found in the SVG.")
     unit_names = list(units)
 
     x, zdepth, dz, grid, under, colors = rasterize(svg_file, shape_unit, unit_names, Lx, Lz, Nx, dz, domain_id)
+    grid, under, _ = fill_gaps(grid, under, Lx / (Nx - 1), dz, verbose=verbose)
+    grid, under = remove_slivers(grid, under, dz, Lz, min_thickness, unit_names, verbose=verbose)
     stack, unique, base = build_stack(grid, dz, Lz, unit_names)
 
     # consistency check: rebuild the unit field of the drawing from the interfaces (Mandyoc convention)
@@ -743,6 +861,8 @@ def _main():
     parser.add_argument("--dx", type=float, help="horizontal resolution [km] (default: from the setup shape)")
     parser.add_argument("--Nx", type=int, help="number of points in x (alternative to --dx)")
     parser.add_argument("--sampling", type=float, default=0.1, help="vertical sampling to locate the interfaces [km] (default 0.1)")
+    parser.add_argument("--min-thickness", type=float, help="remove thinner pieces [km] of units drawn thicker elsewhere, "
+                        "left by overlapping shapes; 0 keeps them (default: from the setup shape, or 1 km)")
     parser.add_argument("--domain-id", help="id of an element whose bounding box is the domain (default: the shape labelled 'setup', or the page)")
     parser.add_argument("-o", "--output", default="interfaces.txt")
     parser.add_argument("--plot", help="save a figure of the resulting layers (e.g. numerical_setup.png)")
@@ -761,7 +881,8 @@ def _main():
         raise SVGInputError("Give the horizontal resolution with --dx or --Nx.")
     print(f"Domain: Lx = {Lx / 1e3:g} km, Lz = {Lz / 1e3:g} km, Nx = {Nx}")
 
-    layers = layers_from_svg(args.svg, Lx, Lz, Nx, dz=args.sampling * 1.0e3, domain_id=args.domain_id)
+    min_thickness = args.min_thickness * 1.0e3 if args.min_thickness is not None else None
+    layers = layers_from_svg(args.svg, Lx, Lz, Nx, dz=args.sampling * 1.0e3, domain_id=args.domain_id, min_thickness=min_thickness)
     write_interfaces(layers, args.output)
     print(f"Wrote {args.output}")
 

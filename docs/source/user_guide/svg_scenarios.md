@@ -57,6 +57,19 @@ asthenosphere over the whole domain and the other units on top of it. Two labels
 `asthenosphere` (the bottom unit) and `weak_seed` (weak zones, which receive an initial strain of 1.0).
 The top unit must be the sticky air.
 
+The shapes do not need to fill the setup shape exactly: points not covered by any unit (thin gaps between
+shapes, shapes that stop short of the sides, the top or the bottom of the domain) take the unit of the
+nearest covered point, first along the same depth and then, for depths without any unit, along the same
+column. A warning gives the number of points filled and the largest distance, so that a forgotten shape
+is not filled silently.
+
+Shapes that overlap a little also leave thin layers: a crust drawn a bit below the base of the air leaves
+a thin layer of the mantle painted under it, between the air and the crust. A layer of the stack thinner
+than `min_thickness` (default 1 km) in every column is removed, and takes the unit right below it, when
+its unit is thicker elsewhere. Units thin everywhere (e.g. a 1 km decollement) and the thin ends of thick
+layers are kept. A warning lists the removed layers; set `min_thickness = 0 km` in the description of the
+setup shape (or `--min-thickness 0`) to keep them.
+
 ## Thickness of the units (`h`)
 
 The drawing does not need to be in vertical scale: `h` gives the reference thickness of a unit.
@@ -105,6 +118,7 @@ overrides the SVG. Defaults:
 | `magmatism`, `magmatism_extraction` | `off` | with both `on`, a basalt layer receives the extracted melt |
 | `magmatism_Ts0` | 1080 °C | |
 | `preset_initial_temperature` | none | folder of a preliminary scenario (see below) |
+| `min_thickness` | 1 km | thin layers left by overlapping shapes (see above); `0 km` keeps them |
 
 The accordion regime (as in the M300 experiments) scales the boundary velocity in time (`scale_bcv.txt`):
 extension until 25 Myr, convergence until 75 Myr, quiescence during `quiescence_time` and extension again.

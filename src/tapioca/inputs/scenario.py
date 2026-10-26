@@ -18,6 +18,7 @@ experiment:
     magmatism_extraction = off
     magmatism_Ts0 = 1080
     preset_initial_temperature = ../preliminary
+    min_thickness = 1 km
 
 Each setting may also be given to SVGScenario (or on the command line, tapioca-svg),
 which overrides the SVG; without it, the default is used.
@@ -37,7 +38,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 from .materials import MandyocLayer, Basalt
-from .svg import SVGInputError, SETUP_LABEL, read_domain, layers_from_svg, write_interfaces, points_from_spacing
+from .svg import SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, write_interfaces, points_from_spacing
 
 __all__ = ["SVGScenario", "REGIMES"]
 
@@ -385,6 +386,10 @@ class SVGScenario:
         Labels of the asthenosphere and of the weak seed in the SVG.
     sampling : float
         Vertical sampling used to locate the interfaces in the SVG [m].
+    min_thickness : float, optional
+        Pieces of a unit thinner than min_thickness [km] in every column, when the unit is thicker
+        elsewhere, are removed (slivers left by overlapping shapes; 0 keeps them). Default: from the setup
+        shape of the SVG, or 1 km.
     verbose : bool
         Print the steps.
 
@@ -420,7 +425,8 @@ class SVGScenario:
     def __init__(self, svg_file, dx=None, dz=None, regime=None, velocity=None, moving_boundary=None,
                  quiescence_time=None, time_max=None, magmatism=None, magmatism_extraction=None,
                  magmatism_Ts0=None, preset_initial_temperature=None,
-                 asthenosphere_label='asthenosphere', seed_label='weak_seed', sampling=100.0, verbose=True):
+                 asthenosphere_label='asthenosphere', seed_label='weak_seed', sampling=100.0, min_thickness=None,
+                 verbose=True):
 
         self.verbose = verbose
         self.svg_file = svg_file
@@ -451,9 +457,12 @@ class SVGScenario:
         #layers
         self.asthenosphere_label = asthenosphere_label
         self.seed_label = seed_label
-        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, domain_id=domain['id'], verbose=verbose)
+        self.min_thickness = min_thickness * 1.0e3 if(min_thickness is not None) else domain.get('min_thickness', MIN_THICKNESS)
+        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, domain_id=domain['id'],
+                                      min_thickness=self.min_thickness, verbose=verbose)
         if(self.layers[-1].rheology_name != 'air'):
-            raise SVGInputError(f"The top layer of {svg_file} must be the sticky air (found '{self.layers[-1].layer_label}').")
+            raise SVGInputError(f"The top layer of {svg_file} must be the sticky air, with 'air' in the first line of its "
+                                f"description (found '{self.layers[-1].layer_label}' with {self.layers[-1].rheology_name}).")
         if(len(layer_indices(self.layers, asthenosphere_label)) == 0):
             raise SVGInputError(f"No shape labelled '{asthenosphere_label}' in {svg_file}.")
 
