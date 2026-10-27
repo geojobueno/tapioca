@@ -1,6 +1,5 @@
-"""
-Input builders for Mandyoc scenarios.
 
+"""
 - MandyocBuilder, VelocityFieldBuilder and TemperatureFieldBuilder: generic builders of the
   interfaces, material fields, velocity and temperature of a scenario, used from scripts;
   
@@ -10,12 +9,15 @@ Input builders for Mandyoc scenarios.
   (interfaces, parameters, initial temperature and velocity for rifting, compression,
   accordion and quiescence experiments).
 """
-# getting the same version of the whole module
+
 from ..__init__ import __version__
 
 # getting the generic input classes
+
 from .generic_input_classes import * 
 
 from . import svg
 
 __all__ = ["MandyocBuilder", "VelocityFieldBuilder", "TemperatureFieldBuilder", "svg"]
+
+
