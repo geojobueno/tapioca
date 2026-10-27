@@ -24,3 +24,6 @@ with catch_warnings(): #filtering warning for the preexisting attribute of the d
 # 4. Import utils functions
 from ._aux_functions import *
 
+# 6. Import input builders (scenarios from SVG files)
+from . import inputs
+

@@ -23,7 +23,9 @@ move_files() {
     mkdir -p "$dest_dir"
 
     # Move the files and report success.
-    mv $pattern "$dest_dir/"
+    # 'find ... -exec ... +' splits the files into batches, avoiding the
+    # "argument list too long" error of 'mv $pattern' with many files (e.g. step*, litho*).
+    find . -maxdepth 1 -type f -name "$pattern" -exec sh -c 'mv "$@" "$0"/' "$dest_dir" {} +
     echo "Successful: Moved '$pattern' files to '$dest_dir/'"
 }
 
@@ -41,6 +43,7 @@ for prefix in "${prefixes[@]}"; do
 done
 
 # Handle the special cases using the same reusable function
+move_files "sp_surface_global*.txt" "surface"
 move_files "litho*.txt" "lithos"
 move_files "step*.txt" "steps"
 

@@ -34,7 +34,7 @@ class scenPostProcessing:
         Default is the global ``VARS_TYPES``.
     """
 
-    def __init__(self, mandyocScen_DTree:xr.Datatree, varsTypes=VARS_TYPES):
+    def __init__(self, mandyocScen_DTree:DataTree, varsTypes=VARS_TYPES):
         
         self.scenario = mandyocScen_DTree
         self.varsTypes = varsTypes

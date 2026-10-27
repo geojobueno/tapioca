@@ -31,8 +31,13 @@ dependencies = [
     "h5netcdf",     
     "shapely>=2.1.2",
     "numba",
-    "dask"
+    "dask",
+    "svgelements"
 ]
+
+[project.scripts]
+tapioca-svg = "tapioca.inputs.cli:main"
+tapioca-svg-interfaces = "tapioca.inputs.svg:main"
 
 
 # Future implementations!!

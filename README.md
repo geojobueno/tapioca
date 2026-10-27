@@ -7,9 +7,18 @@ TapIOca is a python package with tools for pre- and post-processing of [Mandyoc]
 The current version (v0.1.0) of tapIOca enables the manipulation of Mandyoc outputs from .nc files.
 These netCDF files must be created from text file outputs containing the "x", "z" and "time" dimensions. Future versions of Mandyoc will natively support these output formats. In the meantime, you can use [Julia scripts](src/postrunning/README.md) to format your .txt data. You can send an e-mail to [jbueno@usp.br](mailto:jbueno@usp.br) in case of any question.
 
+TapIOca also creates the input files of Mandyoc from scenarios drawn in SVG files (e.g. in Inkscape), with the
+geometry, the materials and the numerical experiment (rifting, compression, accordion or quiescence):
+
+```
+tapioca-svg scenario.svg -o my_scenario
+```
+
+See [examples/svg_scenarios](examples/svg_scenarios/README.md) and the user guide (*Scenarios from SVG files*).
+
 Future implementations of tapIOca are planned to include:
 - A basic usage guide;
-- Frameworks to facilitate scenarios creation;
+- Frameworks to facilitate scenarios creation (scenarios from SVG files are available in `tapioca.inputs`);
 - Specialised plotting functions (xarray and matplotlib functions are working);
 - New post-processing tools;
 
