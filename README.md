@@ -33,6 +33,19 @@ conda env create -f environment.yml -y
 pip install -e .
 ```
 
+## Tests
+
+The tests use [pytest](https://docs.pytest.org) and cover the variables and auxiliary functions, the materials,
+the generic builders (`tapioca.inputs`), the SVG scenarios of `examples/svg_scenarios` (on a coarse grid), the
+command line tools and the post-processing of `examples/continental_rift`. From the root of the repository:
+
+```
+pip install -e ".[test]"   # or: conda install pytest
+pytest
+```
+
+Run them before a pull request, and add tests for new functions in the `tests` folder.
+
 ## Contributing
 
 This package is still in its early stages, so **contributions are welcome**. You can contribute by: sharing your own functions and methods, **reporting bugs or malfunctions**, suggesting new features and approaches for managing Mandyoc data.

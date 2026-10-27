@@ -50,6 +50,10 @@ viz = [
     "ipython"
 ]
 
+test = [
+    "pytest"
+]
+
 docs = [
     "sphinx-autobuild",
     "myst-parser",
@@ -60,3 +64,8 @@ docs = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+

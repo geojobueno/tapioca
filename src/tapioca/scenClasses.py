@@ -515,7 +515,7 @@ class MandyocScen:
         if len(selection_name) == 0:
             selection_name = 'selected'
         
-        elif len(selected_name) == 0:
+        if len(selected_name) == 0:
             selected_name = 'original'
         
         source_path = f'/particles/{selected_name}'

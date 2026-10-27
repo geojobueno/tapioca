@@ -6,3 +6,9 @@ cd tapioca
 conda env create -f environment.yml -y
 pip install -e .
 ```
+
+To check that everything works, run the tests (with pytest, included in `environment.yml`) from the root of the repository:
+
+```bash
+pytest
+```
