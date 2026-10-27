@@ -18,7 +18,7 @@ See [examples/svg_scenarios](examples/svg_scenarios/README.md) and the user guid
 
 Future implementations of tapIOca are planned to include:
 - A basic usage guide;
-- Frameworks to facilitate scenarios creation (scenarios from SVG files are available in `tapioca.inputs`);
+- Frameworks to facilitate scenarios creation (generic builders in `tapioca.inputs` and scenarios from SVG files in `tapioca.inputs.svg`);
 - Specialised plotting functions (xarray and matplotlib functions are working);
 - New post-processing tools;
 
@@ -32,6 +32,19 @@ cd tapioca
 conda env create -f environment.yml -y
 pip install -e .
 ```
+
+## Tests
+
+The tests use [pytest](https://docs.pytest.org) and cover the variables and auxiliary functions, the materials,
+the generic builders (`tapioca.inputs`), the SVG scenarios of `examples/svg_scenarios` (on a coarse grid), the
+command line tools and the post-processing of `examples/continental_rift`. From the root of the repository:
+
+```
+pip install -e ".[test]"   # or: conda install pytest
+pytest
+```
+
+Run them before a pull request, and add tests for new functions in the `tests` folder.
 
 ## Contributing
 

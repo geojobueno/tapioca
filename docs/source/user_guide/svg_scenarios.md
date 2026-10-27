@@ -1,7 +1,7 @@
 # Scenarios from SVG files
 
 The geometry of a Mandyoc scenario can be drawn in an SVG file (e.g. in [Inkscape](https://inkscape.org))
-and turned into the input files of Mandyoc with `tapioca.inputs`:
+and turned into the input files of Mandyoc with `tapioca.inputs.svg`:
 
 ```bash
 tapioca-svg scenario.svg -o my_scenario
@@ -10,7 +10,7 @@ tapioca-svg scenario.svg -o my_scenario
 or, in Python:
 
 ```python
-from tapioca.inputs import SVGScenario
+from tapioca.inputs.svg import SVGScenario
 SVGScenario("scenario.svg").write_all("my_scenario")
 ```
 
@@ -36,8 +36,9 @@ Each filled shape is a body of rock described by its object properties (Inkscape
 
 - **Label**: name of the unit (`layer_label`). Shapes with the same label are the same unit.
 - **Title**: name of the unit in the legend of the figures (optional).
-- **Description**: the rheology in the first line (`wet olivine`, `dry olivine`, `wet quartz`, `dry quartz`,
-  `basalt`, `plagioclase` or `air`) and the properties in the next lines:
+- **Description**: the rheology in the first line, a material of `tapioca.DEFAULT_MATERIALS` (`wet olivine`,
+  `dry olivine`, `wet quartz`, `wet anorthite`, `linear salt`, `dry quartz`, `basalt`, `plagioclase` or `air`)
+  and the properties in the next lines:
 
 ```
 wet quartz
@@ -48,13 +49,18 @@ h = 10 km
 ```
 
 `C` (viscosity scale factor), `rho` (density) and `H` (radiogenic heat production, W/kg) are required.
-`A`, `n`, `Q` and `V` are optional and override the values of the rheology. A shape without description
+`k`, `weakening_seed`, `cohesion_min`, `cohesion_max`, `friction_angle_min` and `friction_angle_max` are also
+accepted and, like `A`, `n`, `Q` and `V`, take the values of the rheology when they are not given:
+`interfaces.txt` has the 13 parameters of `tapioca.DEFAULT_MATERIAL`.
+`A`, `n`, `Q` and `V` are optional and override the values of the rheology in `DEFAULT_MATERIALS` (the
+examples in `examples/svg_scenarios` give them, to keep the flow laws used before the materials were unified). A shape without description
 inherits the one of the group (e.g. an Inkscape layer) that contains it; shapes without any description
 (annotations, arrows) are ignored. The fill colour is used in the figures.
 
 Shapes are painted in document order, as Inkscape renders them: a simple way to draw is a rectangle of
 asthenosphere over the whole domain and the other units on top of it. Two labels are special:
-`asthenosphere` (the bottom unit) and `weak_seed` (weak zones, which receive an initial strain of 1.0).
+`asthenosphere` (the bottom unit) and `weak_seed` (weak zones, which receive an initial strain of 1.0:
+`weakening_seed = 1` in `interfaces.txt`, unless another value is given in the description).
 The top unit must be the sticky air.
 
 The shapes do not need to fill the setup shape exactly: points not covered by any unit (thin gaps between

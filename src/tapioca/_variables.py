@@ -179,7 +179,29 @@ DEFAULT_MATERIALS:dict = {
         "friction_angle_min": 2.0,
         "friction_angle_max": 5.0
     },
-    "AIR": { 
+    # Flow laws of the SVG scenarios (A, n, Q, V); the other parameters are the DEFAULT_MATERIAL ones
+    "DRY_QUARTZ": {
+        **DEFAULT_MATERIAL,
+        "A": 0.0,
+        "n": 0.0,
+        "Q": 0.0,
+        "V": 0.0,
+    },
+    "BASALT": {
+        **DEFAULT_MATERIAL,
+        "A": 8.574e-28,
+        "n": 4.0,
+        "Q": 222000.0,
+        "V": 0.0,
+    },
+    "PLAGIOCLASE": { # Shelton and Tullis (1981)
+        **DEFAULT_MATERIAL,
+        "A": 0.0,
+        "n": 3.05,
+        "Q": 276000.0,
+        "V": 0.0,
+    },
+    "AIR": {
         "C": 0.1,
         "rho": 1.0,
         "H": 0.0,
@@ -228,6 +250,7 @@ PARAMS_TYPES = {
     'magmatism':str, 
     'magmatism_extraction':str, 
     'magmatic_layer':str, 
+    'magmatism_Ts0':float,
 
     ## Numerical
     'multigrid':int,

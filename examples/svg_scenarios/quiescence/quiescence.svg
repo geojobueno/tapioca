@@ -45,7 +45,11 @@
          id="desc1">wet olivine
 C = 1.0
 rho = 3378.0
-H = 7.38e-12</desc>
+H = 7.38e-12
+A = 1.393e-14
+n = 3
+Q = 429.0e3
+V = 15.0e-6</desc>
     </rect>
     <path
        id="lithospheric_mantle"
@@ -59,7 +63,11 @@ H = 7.38e-12</desc>
 C = 1.0
 rho = 3354.0
 H = 9.0e-12
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </path>
     <rect
        id="mobile_belt"
@@ -76,7 +84,11 @@ h = 85 km</desc>
 C = 1.0
 rho = 3354.0
 H = 9.0e-12
-h = 130 km</desc>
+h = 130 km
+A = 1.393e-14
+n = 3
+Q = 429.0e3
+V = 15.0e-6</desc>
     </rect>
     <rect
        id="lower_crust"
@@ -93,7 +105,11 @@ h = 130 km</desc>
 C = 1.0
 rho = 2800.0
 H = 2.86e-10
-h = 15 km</desc>
+h = 15 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect
        id="upper_crust"
@@ -110,7 +126,11 @@ h = 15 km</desc>
 C = 1.0
 rho = 2700.0
 H = 9.26e-10
-h = 20 km</desc>
+h = 20 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect
        id="air"
@@ -127,7 +147,11 @@ h = 20 km</desc>
 C = 1.0
 rho = 1.0
 H = 0.0
-h = 40 km</desc>
+h = 40 km
+A = 1.0e-18
+n = 1.0
+Q = 0.0
+V = 0.0</desc>
     </rect>
   </g>
   <g

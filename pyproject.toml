@@ -36,8 +36,8 @@ dependencies = [
 ]
 
 [project.scripts]
-tapioca-svg = "tapioca.inputs.cli:main"
-tapioca-svg-interfaces = "tapioca.inputs.svg:main"
+tapioca-svg = "tapioca.inputs.svg.cli:main"
+tapioca-svg-interfaces = "tapioca.inputs.svg.reader:main"
 
 
 # Future implementations!!
@@ -50,6 +50,10 @@ viz = [
     "ipython"
 ]
 
+test = [
+    "pytest"
+]
+
 docs = [
     "sphinx-autobuild",
     "myst-parser",
@@ -60,3 +64,8 @@ docs = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+

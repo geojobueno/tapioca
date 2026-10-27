@@ -21,6 +21,7 @@ dependencies:
   - h5netcdf
   - dask
   - svgelements
+  - pytest
   # documentation
   - sphinx
   - myst-parser
