@@ -1,6 +1,9 @@
 import numpy as np
 
-__all__ = ["VARIABLES_LIST","VARS_TYPES","SEC_PER_YEAR","CM"]
+__all__ = ["VARIABLES_LIST","VARS_TYPES","PARAMS_TYPES",
+           "SEC_PER_YEAR","CM",
+           "INTERFACES_PARAMETERS","DEFAULT_MATERIAL","MATERIAL_PARAMETERS","PARAMETERS_UNITS",
+           "DEFAULT_MATERIALS"]
 
 VARIABLES_LIST:list = ["density",
 "heat",
@@ -46,6 +49,309 @@ SEC_PER_YEAR:float = 60*60*24*365.25 # seconds per year
 
 CM:float = 1/2.54 # cm per inch -> convert plotting to centimeters by *cm 
 """float: Conversion factor of inches to centimeters. Useful to change matplotlib measures."""
+
+INTERFACES_PARAMETERS:dict = {
+    "C": "scale_factor",
+    "rho": "density",
+    "H": "radiogenic_heat",
+    "A": "pre-exponential_scale_factor",
+    "n": "power_law_exponent",
+    "Q": "activation_energy",
+    "V": "activation_volume",
+    "k": "thermal_diffusivity",
+    "weakening_seed": "weak_seed_strain",
+    "cohesion_min": "cohesion_min",
+    "cohesion_max": "cohesion_max",
+    "friction_angle_min": "friction_angle_min",
+    "friction_angle_max": "friction_angle_max"
+}
+"""dict: Dictionary containing the interfaces.txt variables and their corresponding aliases."""
+
+DEFAULT_MATERIAL:dict = {
+    "rho": None,  
+    "C": 1.0,
+    "H": 0.0,
+    "A": 1e-18,
+    "n": 1,
+    "Q": 0.0,
+    "V": 0.0,
+    "k": 1.0e-6,
+    "weakening_seed": -1,
+    "cohesion_min": 4e6,
+    "cohesion_max": 20e6,
+    "friction_angle_min": 2,
+    "friction_angle_max": 15
+}
+"""dict: Dictionary containing default properties for the interface material (linear rheology)"""
+
+MATERIAL_PARAMETERS:list = list(DEFAULT_MATERIAL.keys())
+
+PARAMETERS_UNITS:dict = {
+    "rho" : 'kg/m3',
+    "C" : 'dimensionless',
+    "H" : 'W/kg',
+    "A" : 'Pa^(-n)/s',
+    "n" : 'dimensionless',
+    "Q" : 'J/mol',
+    "V" : 'm3/mol',
+    "k" : 'm2/s',
+    "weakening_seed" : 'dimensionless',
+    "cohesion_min" : 'Pa',
+    "cohesion_max" : 'Pa',
+    "friction_angle_min": 'degrees',
+    "friction_angle_max": 'degrees',
+}
+"""dict: Dictionary containing the units for each interface parameters."""
+
+DEFAULT_MATERIALS:dict = {
+    "WET_OLIVINE": { # Karato and Wu (1993)
+        "C": 1.0,
+        "rho": 3378.0,
+        "H": 0.0,
+        "A": 1.393e-14,
+        "n": 3.0,
+        "Q": 429000.0,
+        "V": 1.450e-05,
+        "k": 1.0e-6,
+        "weakening_seed": -1.0,
+        "cohesion_min": 4000000.0,
+        "cohesion_max": 20000000.0,
+        "friction_angle_min": 4.0,
+        "friction_angle_max": 15.0
+    },
+    "DRY_OLIVINE": { # Karato and Wu (1993)
+        "C": 1.0,
+        "rho": 3354.0,
+        "H": 9.000e-12,
+        "A": 2.417e-15,
+        "n": 3.5,
+        "Q": 540000.0,
+        "V": 2.450e-05,
+        "k": 1.0e-6,
+        "weakening_seed": -1.0,
+        "cohesion_min": 4000000.0,
+        "cohesion_max": 20000000.0,
+        "friction_angle_min": 4.0,
+        "friction_angle_max": 15.0
+    },
+    "WET_QUARTZ": {  # Glean and Tullis (1995)
+        "C": 1.0,
+        "rho": 2700.0,
+        "H": 4.630e-10,
+        "A": 8.574e-28,
+        "n": 4.0,
+        "Q": 222000.0,
+        "V": 0.0,
+        "k": 1.0e-6,
+        "weakening_seed": -1.0,
+        "cohesion_min": 4000000.0,
+        "cohesion_max": 20000000.0,
+        "friction_angle_min": 2.0,
+        "friction_angle_max": 15.0
+    },
+    "WET_ANORTHITE": { # Rybacki and Dresen (2000, 2004); Andrés-Martínez et al. (2019)
+        "C": 1.0,
+        "rho": 2850.0,
+        "H": 7.123e-11,        # 0.041 uW/m^3
+        "A": 3.9810717e-16, #8.913e-22,     # 10^-21.05
+        "n": 3.0,
+        "Q": 356000.0,      # 356 kJ/mol
+        "V": 0.0,
+        "k": 1.15e-6,
+        "weakening_seed": -1.0,
+        "cohesion_min": 4000000.0,
+        "cohesion_max": 25000000.0,
+        "friction_angle_min": 2.0,
+        "friction_angle_max": 20.0
+    },
+    "LINEAR_SALT": { # Massimi et al. (2007); Pichel et al. (2022)
+        "C": 1.0,
+        "rho": 2200.0,
+        "H": 0.0,
+        "A": 2.0e-19,
+        "n": 4.0,
+        "Q": 0.0,
+        "V": 0.0,
+        "k": 3.5e-6,
+        "weakening_seed": -1.0,
+        "cohesion_min": 2000000.0,
+        "cohesion_max": 5000000.0,
+        "friction_angle_min": 2.0,
+        "friction_angle_max": 5.0
+    },
+    "AIR": { 
+        "C": 0.1,
+        "rho": 1.0,
+        "H": 0.0,
+        "A": 1.0e-18,
+        "n": 1.0,
+        "Q": 0.0,
+        "V": 0.0,
+        "k": 1.0e-5,
+        "weakening_seed": -1.0,
+        "cohesion_min": 100000.0,
+        "cohesion_max": 1000000.0,
+        "friction_angle_min": 2.0,
+        "friction_angle_max": 5.0
+    }
+}
+'''dict: Dictionary with the parameters of some "classic" rheologies. The rheology is the key and the values is the parameters.'''
+
+PARAMS_TYPES = {
+    # Simulation parameters
+    'dimensions':int,
+
+    'nx':int,
+    'nz':int,
+    'ny':int,
+    
+    'lx':float,
+    'lz':float,
+    'ly':float,
+
+    'particles_per_element':int,
+    'particles_per_element_x':int,
+    'particles_per_element_y':int,
+    'particles_per_element_z':int,
+    'particles_to_export':int,
+    'particles_perturb_factor':float,
+
+    ## Inputs
+    'interfaces_from_ascii':str, 
+    'temperature_from_ascii':str, 
+    'velocity_from_ascii':str, 
+    'n_interfaces':int,
+    'water_interface':int,
+    'air_threshold_density':float,
+
+    ## Magmatism
+    'magmatism':str, 
+    'magmatism_extraction':str, 
+    'magmatic_layer':str, 
+
+    ## Numerical
+    'multigrid':int,
+    'solver':str, 
+    'nondimensionalization':str, 
+    'denok':float,
+    'Xi_min':float,
+    'rtol':float,
+    'non_linear_method':str,
+    'periodic_boundary':str,
+    'RK4':str, 
+
+    ## Time    
+    'step_max':int,
+    'step_print':int,
+    'time_max':float,
+    'dt_max':float,
+    'sub_division_time_step':float,
+    'initial_print_step':int,
+    'initial_print_max_time':float,
+
+    ## Rheology
+    'initial_dynamic_range':str, 
+    'viscosity_reference':float,
+    'viscosity_min':float,
+    'viscosity_max':float,
+    'viscosity_per_element':str, 
+    'viscosity_mean_method':str, 
+    'viscosity_dependence':str, 
+
+    'random_initial_strain':float,
+    'rheology_model':int,
+    'weakening_min':float,
+    'weakening_max':float,
+    'A_healing':float,
+    'T0_healing':float,
+    'k_healing':float,
+    'strain_healing':float,
+
+    # Temperature and other parameters
+    'geoq':str,
+    'geoq_fac':float,
+    'plasticity':str, 
+    'adiabatic_component':str, 
+    'shear_heating':str, 
+    'Xi_shear':str, 
+    'radiogenic_component':str, 
+    'high_kappa_in_asthenosphere':str, 
+
+    'T_initial':int,
+    'temperature_difference':float,
+    'external_heat':float,
+    'basal_heat':float,
+    'pressure_const':float,
+
+    # Physical parameters
+    'density_mantle':float,
+    'gravity_acceleration':float,
+    'thermal_expansion_coefficient':float,
+    'thermal_diffusivity_coefficient':float,
+    'heat_capacity':float,
+
+    # Surface processes
+    'sp_surface_tracking':str, 
+    'surface_particles_per_element':int,
+    'sp_surface_processes':str, 
+
+    'free_surface_stab':str, 
+    'theta_FSSA':float,
+    
+    'sp_mode':str,
+    'sticky_blanket_air':str, 
+    
+    'surface_velocity':float,
+    'strain_sed':float,
+    'a2l':str, 
+
+    ## Fluvial/diffusion
+    'K_fluvial':float,
+    'm_fluvial':float,
+    'sea_level':float,
+    'sp_d_c':float,
+
+    ## Submarine
+    'continental_slope':float,
+    'variable_base_level':str,
+    
+    # Boundary conditions
+    
+    'top_normal_velocity':str, 
+    'bot_normal_velocity':str, 
+    'left_normal_velocity':str, 
+    'right_normal_velocity':str, 
+    'back_normal_velocity':str, 
+    'front_normal_velocity':str, 
+    'top_tangential_velocity':str, 
+    'bot_tangential_velocity':str, 
+    'left_tangential_velocity':str, 
+    'right_tangential_velocity':str, 
+    'back_tangential_velocity':str, 
+    'front_tangential_velocity':str, 
+    
+    'top_temperature':str, 
+    'bot_temperature':str, 
+    'left_temperature':str, 
+    'right_temperature':str, 
+    'front_temperature':str, 
+    'back_temperature':str, 
+
+    'variable_bcv':str, 
+    'bcv_extern':str,   
+    'multi_velocity':str,  
+
+    # Outputs
+    'export_thermal_diffusivity':str,
+    'print_step_files':str, 
+    'export_lithology':str, 
+    'checkered':str, 
+    'binary_output':str, 
+    'plot_sediment':str,
+}
+'''dict: Dictionary with the valid parameters in `param.txt` and its valid type'''
+
+
 
 # Useful data types descriptions:
 
