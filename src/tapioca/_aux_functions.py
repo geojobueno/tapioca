@@ -434,6 +434,63 @@ def build_diagonals_2D(Nz, Nx, dz, dx, k_2D, H_2D, T_bot, T_top,ZZ,Tmesh,lab_sur
             
     return diag_down, diag_left, diag_main, diag_right, diag_up, b
 
+def _conductive_columns(depth:np.ndarray, thickness_sa:np.ndarray, thickness_litho:np.ndarray, H:np.ndarray,
+                        dt:float, num_steps:int, t_pot:float=1400.0, delta_T:float=0.0, kappa:float=1.0e-6,
+                        c_cap:float=1250.0, alpha:float=3.28e-5, g:float=-10.0, t_litho:float=1300.0):
+    '''
+    Conductive temperature (Nz, Nx), solved in 1D (vertical) only for the distinct columns
+    (same sticky air, lithosphere and radiogenic heat profile), so a lithosphere that varies
+    along x costs one 1D solution per distinct column.
+
+    The initial guess is linear from 0 oC at the base of the sticky air to `t_litho` at the base of the
+    lithosphere, limited by the adiabat of the asthenosphere (t_pot + delta_T). The nodes in the sticky
+    air (0 oC) and in the asthenosphere keep their initial temperature (Dirichlet), and the lithosphere
+    evolves with the explicit (forward Euler) scheme for num_steps steps of dt.
+
+    Parameters
+    ----------
+    depth: np.ndarray
+        Depth of the nodes from the top of the model (positive downwards, in m), shape (Nz,).
+    thickness_sa, thickness_litho: np.ndarray
+        Thickness of the sticky air and of the lithosphere in each column (in m), shape (Nx,).
+    H: np.ndarray
+        Radiogenic heat production (in W/kg), shape (Nz, Nx).
+    dt: float
+        Time step (in s).
+    num_steps: int
+        Number of time steps.
+    t_pot, delta_T, t_litho: float, optional
+        Potential temperature of the mantle, its increase and the temperature at the base of the
+        lithosphere of the initial guess (in oC).
+    kappa, c_cap, alpha, g: float, optional
+        Thermal diffusivity (m2/s), heat capacity (J/kg/K), thermal expansion coefficient (1/K) and
+        gravity acceleration (m/s2, negative downwards).
+    '''
+    dz = (depth.max() - depth.min()) / (len(depth) - 1)
+    columns =np.vstack([thickness_sa, thickness_litho, H])
+    columns_unique, idx_columns = np.unique(columns, axis=1, return_inverse=True)
+    idx_columns = idx_columns.ravel()
+    sa_col, litho_col, H = columns_unique[0], columns_unique[1], columns_unique[2:]
+
+    zcol = depth[:, None]
+    T = t_litho * (zcol - sa_col) / (litho_col)
+    Ta = (t_pot / np.exp(g * alpha * (zcol - sa_col) / c_cap)) + delta_T #asthenosphere
+
+    T[T < 0.0] = 0.0
+    cond1 = Ta < T #where the asthenosphere temperature is lower than the lithospheric one
+    T[T > Ta] = Ta[T > Ta]
+
+    Taux = np.copy(T)
+    cond = cond1 | (T == 0)
+    for step in range(num_steps):
+        T[1:-1] += (
+            kappa * dt * ((T[2:] + T[:-2] - 2 * T[1:-1]) / dz ** 2)
+            + H[1:-1] * dt / c_cap
+        )
+        T[cond] = Taux[cond]
+
+    return T[:, idx_columns], len(sa_col)
+
 def _Druker_Prager_YS(c:float, Phi:float, P:float):
     '''
     Gives the plastic Yield Stress (in Pa) according to the Druker-Prager criterion:

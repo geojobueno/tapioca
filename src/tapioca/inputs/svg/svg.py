@@ -6,7 +6,8 @@ Each filled shape is a body of rock described by its object properties
 
     Label        name of the unit (layer_label). Falls back to the id.
     Title        optional, used in the legend of the plot.
-    Description  first line: rheology (wet olivine, dry olivine, wet quartz,
+    Description  first line: rheology (a material of tapioca.DEFAULT_MATERIALS:
+                 wet olivine, dry olivine, wet quartz, wet anorthite, linear salt,
                  dry quartz, basalt, plagioclase, air); next lines: key = value
                  with the layer properties, e.g.
 
@@ -15,8 +16,10 @@ Each filled shape is a body of rock described by its object properties
                      rho = 2800.0
                      H = 0.19e-6/2800.0
 
-                 Keys: C, rho, H (required), and A, n, Q, V (optional, they
-                 override the values of the rheology). Long names such as
+                 Keys: C, rho, H (required), and A, n, Q, V, k, weakening_seed,
+                 cohesion_min, cohesion_max, friction_angle_min and
+                 friction_angle_max (optional, they override the values of the
+                 rheology in DEFAULT_MATERIALS). Long names such as
                  density or radiogenic_heat_production are also accepted.
 
                  Optional: h = 120 km (or h = 120e3 m), the reference
@@ -75,9 +78,10 @@ Usage
 
 or, from another script:
 
-    from tapioca.inputs import read_domain, layers_from_svg
+    from tapioca.inputs.svg import read_domain, layers_from_svg
     domain = read_domain("scenario.svg")
     layers = layers_from_svg("scenario.svg", domain["Lx"], domain["Lz"], domain["Nx"])
+    builder = layers_to_builder(layers, domain["Lx"], domain["Lz"], Nz=domain["Nz"])  # tapioca.inputs.MandyocBuilder
 
 Requires: numpy, matplotlib, svgelements (pip install svgelements)
 '''
@@ -86,8 +90,11 @@ import argparse
 import ast
 import copy
 import operator
+import os
 import re
+import shutil
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -96,6 +103,8 @@ from matplotlib.path import Path as MplPath
 from matplotlib.patches import Patch
 import svgelements as se
 
+from ..._variables import DEFAULT_MATERIAL
+from ...scenClasses import MandyocBuilder
 from .materials import MandyocLayer, get_rheology
 
 __all__ = ["SVGInputError", "read_domain", "read_units", "layers_from_svg", "write_interfaces",
@@ -123,16 +132,7 @@ PROPERTY_KEYS = {
     "V": "activation_volume",
 }
 PROPERTY_KEYS.update({attr: attr for attr in list(PROPERTY_KEYS.values())})
-
-#Build layer_properties according to the order of the stack_layers
-rheological_symbols = ['C', 'rho', 'H', 'A', 'n', 'Q', 'V']
-rheological_properties = ['effective_viscosity_scale_factor',
-                          'density',
-                          'radiogenic_heat_production',
-                          'pre_exponential_constant',
-                          'power_law_exponent',
-                          'activation_energy',
-                          'activation_volume']
+PROPERTY_KEYS.update({key: key for key in DEFAULT_MATERIAL if key not in PROPERTY_KEYS})  # k, cohesion_min, ...
 
 ###############################################################################
 # Functions
@@ -239,7 +239,7 @@ def read_domain(svg_file):
 def parse_description(text, where):
     '''
     Parse the description of a shape into
-    (rheology class, {MandyocLayer attribute: value}, reference thickness in m or None).
+    (rheology (LithologicalUnit), {MandyocLayer attribute: value}, reference thickness in m or None).
     '''
     rheology, props, thickness = None, {}, None
     for line in text.splitlines():
@@ -259,7 +259,7 @@ def parse_description(text, where):
             thickness = parse_thickness(value, where)
             continue
         if key not in PROPERTY_KEYS:
-            raise SVGInputError(f"{where}: unknown property '{key}'. Use {', '.join(rheological_symbols)}.")
+            raise SVGInputError(f"{where}: unknown property '{key}'. Use {', '.join(DEFAULT_MATERIAL)}.")
         try:
             props[PROPERTY_KEYS[key]] = eval_number(value)
         except (ValueError, SyntaxError):
@@ -638,7 +638,7 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True
                              effective_viscosity_scale_factor=props.pop("effective_viscosity_scale_factor"),
                              radiogenic_heat_production=props.pop("radiogenic_heat_production"),
                              Nx=Nx)
-        for attr, value in props.items():  # A, n, Q, V given in the description
+        for attr, value in props.items():  # A, n, Q, V, k, cohesion_min, ... given in the description
             setattr(layer, attr, value)
         layer.title = u["title"] or name
         layer.color = colors.get(i, "#808080")
@@ -666,20 +666,33 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, verbose=True
     return layers
 
 
-def write_interfaces(layers, fname="interfaces.txt"):
-    '''Write the interfaces.txt of Mandyoc (layer properties and the interfaces, bottom to top).'''
-    to_save = []
-    for symbol, prop in zip(rheological_symbols, rheological_properties):
-        to_save.append(f"{symbol} {' '.join([str(layer.__dict__[prop]) for layer in layers])}")
+def layers_to_builder(layers, Lx, Lz, Nz=2, path=".", seed_label="weak_seed", verbose=False):
+    '''
+    MandyocBuilder (tapioca.inputs) with the interfaces and the materials of the layers (bottom to top,
+    output of layers_from_svg), so that the generic builders of tapioca can be used with an SVG scenario.
+    The interface ID i is the top of layers[i] and carries its material (layer.material()); the top layer
+    (sticky air) is the ID -1. Nz only matters for the fields (create_materials_fields, ...).
+    The layers labelled seed_label (weak zones) get weakening_seed = 1 (initial strain of 1.0), unless
+    weakening_seed is given in their description.
+    '''
+    builder = MandyocBuilder(path, Nx=len(layers[0].interface), Nz=Nz, Lx=Lx, Lz=Lz, verbose=verbose)
+    def material(layer):
+        params = layer.material()
+        if layer.layer_label == seed_label and not hasattr(layer, "weakening_seed"):
+            params["weakening_seed"] = 1.0
+        return params
 
-    with open(fname, "w") as f:
-        for line in to_save:
-            if len(line):
-                f.write(f"{' '.join(line.split())}\n")
+    builder.create_interface(-1, 0.0, interface_name=f"{len(layers)-1:02d}_{layers[-1].layer_label}", **material(layers[-1]))
+    for i, layer in enumerate(layers[:-1]):
+        builder.create_interface(i, -1.0 * layers[i+1].interface, interface_name=f"{i:02d}_{layer.layer_label}", **material(layer))
+    return builder
 
-        # layer interfaces
-        data = -1 * np.array(tuple(layer.interface for layer in layers[1::])).T
-        np.savetxt(f, data, fmt="%.1f")
+
+def write_interfaces(layers, Lx, Lz, fname="interfaces.txt"):
+    '''Write the interfaces.txt of Mandyoc (parameters of the layers and the interfaces, bottom to top) with MandyocBuilder.'''
+    with tempfile.TemporaryDirectory() as folder:  # export_interfaces always writes <path>/interfaces.txt
+        layers_to_builder(layers, Lx, Lz, path=folder).export_interfaces(export="none")
+        shutil.move(os.path.join(folder, "interfaces.txt"), os.path.abspath(fname))
 
 
 def plot_layers(layers, Lx, Lz, fname):

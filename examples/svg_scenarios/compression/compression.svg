@@ -63,7 +63,11 @@
          id="desc1">wet olivine
 C = 1.0
 rho = 3378.0
-H = 0.0</desc>
+H = 0.0
+A = 1.393e-14
+n = 3
+Q = 429.0e3
+V = 15.0e-6</desc>
     </rect>
     <rect
        id="lower_cratonic_mantle_right"
@@ -80,7 +84,11 @@ H = 0.0</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 125 km</desc>
+h = 125 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect
        id="upper_cratonic_mantle_right"
@@ -97,7 +105,11 @@ h = 125 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <path
        id="lithospheric_mantle"
@@ -111,7 +123,11 @@ h = 85 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </path>
     <rect
        id="oceanic_lithospheric_mantle"
@@ -128,7 +144,11 @@ h = 85 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 53 km</desc>
+h = 53 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect
        id="oceanic_crust"
@@ -145,7 +165,11 @@ h = 53 km</desc>
 C = 100.0
 rho = 2800.0
 H = 0.19e-6 / 2800.0
-h = 7 km</desc>
+h = 7 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <path
        id="lower_crust"
@@ -159,7 +183,11 @@ h = 7 km</desc>
 C = 100.0
 rho = 2800.0
 H = 0.19e-6 / 2800.0
-h = 10 km</desc>
+h = 10 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </path>
     <path
        id="upper_crust"
@@ -173,7 +201,11 @@ h = 10 km</desc>
 C = 1.0
 rho = 2700.0
 H = 1.67e-6 / 2700.0
-h = 21 km</desc>
+h = 21 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </path>
     <path
        id="decolement"
@@ -187,7 +219,11 @@ h = 21 km</desc>
 C = 0.1
 rho = 2350.0
 H = 1.25e-6 / 2700.0
-h = 1 km</desc>
+h = 1 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </path>
     <path
        id="sediments"
@@ -201,7 +237,11 @@ h = 1 km</desc>
 C = 1.0
 rho = 2700.0
 H = 1.25e-6 / 2700.0
-h = 3 km</desc>
+h = 3 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </path>
     <rect
        id="air"
@@ -218,7 +258,11 @@ h = 3 km</desc>
 C = 1.0
 rho = 1.0
 H = 0.0
-h = 40 km</desc>
+h = 40 km
+A = 1.0e-18
+n = 1.0
+Q = 0.0
+V = 0.0</desc>
     </rect>
     <path
        id="weak_seed"
@@ -231,7 +275,12 @@ h = 40 km</desc>
          id="desc12">dry olivine
 C = 0.1
 rho = 3330.0
-H = 0.0</desc>
+H = 0.0
+h = 10 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </path>
   </g>
   <g
