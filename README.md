@@ -18,7 +18,7 @@ See [examples/svg_scenarios](examples/svg_scenarios/README.md) and the user guid
 
 Future implementations of tapIOca are planned to include:
 - A basic usage guide;
-- Frameworks to facilitate scenarios creation (scenarios from SVG files are available in `tapioca.inputs`);
+- Frameworks to facilitate scenarios creation (generic builders in `tapioca.inputs` and scenarios from SVG files in `tapioca.inputs.svg`);
 - Specialised plotting functions (xarray and matplotlib functions are working);
 - New post-processing tools;
 

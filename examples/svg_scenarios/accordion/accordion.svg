@@ -21,7 +21,11 @@
       <desc id="desc1">wet olivine
 C = 1.0
 rho = 3378.0
-H = 0.0</desc>
+H = 0.0
+A = 1.393e-14
+n = 3
+Q = 429.0e3
+V = 15.0e-6</desc>
     </rect>
     <rect id="lower_cratonic_mantle_left" inkscape:label="lower_cratonic_lithospheric_mantle" x="-10" y="0" width="409.5" height="285" style="fill:#a3b391;stroke:none">
       <title id="title2">Lower cratonic lith. mantle</title>
@@ -29,7 +33,11 @@ H = 0.0</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 125 km</desc>
+h = 125 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect id="lower_cratonic_mantle_right" inkscape:label="lower_cratonic_lithospheric_mantle" x="1199.5" y="0" width="410.5" height="285" style="fill:#a3b391;stroke:none">
       <title id="title3">Lower cratonic lith. mantle</title>
@@ -37,7 +45,11 @@ h = 125 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 125 km</desc>
+h = 125 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect id="upper_cratonic_mantle_left" inkscape:label="upper_cratonic_lithospheric_mantle" x="-10" y="0" width="409.5" height="160" style="fill:#b3c2a2;stroke:none">
       <title id="title4">Upper cratonic lith. mantle</title>
@@ -45,7 +57,11 @@ h = 125 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect id="upper_cratonic_mantle_right" inkscape:label="upper_cratonic_lithospheric_mantle" x="1199.5" y="0" width="410.5" height="160" style="fill:#b3c2a2;stroke:none">
       <title id="title5">Upper cratonic lith. mantle</title>
@@ -53,7 +69,11 @@ h = 85 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect id="lithospheric_mantle" inkscape:label="lithospheric_mantle" x="399.5" y="0" width="800" height="160" style="fill:#9bc29b;stroke:none">
       <title id="title6">Non-cratonic lith. mantle</title>
@@ -61,7 +81,11 @@ h = 85 km</desc>
 C = 1.0
 rho = 3330.0
 H = 0.0
-h = 85 km</desc>
+h = 85 km
+A = 2.4168e-15
+n = 3.5
+Q = 540.0e3
+V = 25.0e-6</desc>
     </rect>
     <rect id="lower_crust" inkscape:label="lower_crust" x="0" y="0" width="1600" height="75" style="fill:#f0d1bc;stroke:none">
       <title id="title7">Lower crust</title>
@@ -69,7 +93,11 @@ h = 85 km</desc>
 C = 100.0
 rho = 2800.0
 H = 0.19e-6 / 2800.0
-h = 10 km</desc>
+h = 10 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect id="upper_crust" inkscape:label="upper_crust" x="0" y="0" width="1600" height="65" style="fill:#e49c7c;stroke:none">
       <title id="title8">Upper crust</title>
@@ -77,7 +105,11 @@ h = 10 km</desc>
 C = 1.0
 rho = 2700.0
 H = 1.67e-6 / 2700.0
-h = 21 km</desc>
+h = 21 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect id="decolement" inkscape:label="decolement" x="0" y="0" width="1600" height="44" style="fill:#895197;stroke:none">
       <title id="title9">Decolement</title>
@@ -85,7 +117,11 @@ h = 21 km</desc>
 C = 0.1
 rho = 2350.0
 H = 1.25e-6 / 2700.0
-h = 1 km</desc>
+h = 1 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect id="sediments" inkscape:label="sediments" x="0" y="0" width="1600" height="43" style="fill:#f1b844;stroke:none">
       <title id="title10">Sediments</title>
@@ -93,7 +129,11 @@ h = 1 km</desc>
 C = 1.0
 rho = 2700.0
 H = 1.25e-6 / 2700.0
-h = 3 km</desc>
+h = 3 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
     <rect id="air" inkscape:label="air" x="0" y="0" width="1600" height="40" style="fill:#ffffff;stroke:none">
       <title id="title11">Sticky air</title>
@@ -101,7 +141,11 @@ h = 3 km</desc>
 C = 1.0
 rho = 1.0
 H = 0.0
-h = 40 km</desc>
+h = 40 km
+A = 1.0e-18
+n = 1.0
+Q = 0.0
+V = 0.0</desc>
     </rect>
     <rect id="weak_seed" inkscape:label="weak_seed" x="793" y="69" width="12" height="6" style="fill:#000000;stroke:none">
       <title id="title12">Weak seed</title>
@@ -109,7 +153,11 @@ h = 40 km</desc>
 C = 0.1
 rho = 2800.0
 H = 0.2e-6 / 2800.0
-h = 6 km</desc>
+h = 6 km
+A = 8.574e-28
+n = 4.0
+Q = 222.0e3
+V = 0.0</desc>
     </rect>
   </g>
   <g

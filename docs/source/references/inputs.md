@@ -1,8 +1,10 @@
 # Input builders
 
 Input builders are in the subpackage `tapioca.inputs`. They create the input files of Mandyoc
-(`interfaces.txt`, `param.txt`, `input_temperature_0.txt`, `input_velocity_0.txt`, ...) from a scenario
-drawn in an SVG file. See [Scenarios from SVG files](../user_guide/svg_scenarios.md) for how to draw the scenario.
+(`interfaces.txt`, `param.txt`, `input_temperature_0.txt`, `input_velocity_0.txt`, ...). The generic
+builders (`MandyocBuilder`, `VelocityFieldBuilder` and `TemperatureFieldBuilder`) are used from scripts,
+and `tapioca.inputs.svg` builds a scenario drawn in an SVG file. See
+[Scenarios from SVG files](../user_guide/svg_scenarios.md) for how to draw the scenario.
 
 ---
 
@@ -10,10 +12,10 @@ drawn in an SVG file. See [Scenarios from SVG files](../user_guide/svg_scenarios
 
 The `SVGScenario` class reads the SVG, builds the layers, the initial temperature and the velocity
 boundary conditions of the numerical experiment (rifting, compression, accordion or quiescence), and writes
-the input files and figures. The source code is in `inputs/scenario.py`.
+the input files and figures. The source code is in `inputs/svg/scenario.py`.
 
 ```{eval-rst}
-.. currentmodule:: tapioca.inputs.scenario
+.. currentmodule:: tapioca.inputs.svg.scenario
 
 .. autosummary::
    :toctree: ../generated/
@@ -35,10 +37,25 @@ the input files and figures. The source code is in `inputs/scenario.py`.
 
 Example:
 ```python
-from tapioca.inputs import SVGScenario
+from tapioca.inputs.svg import SVGScenario
 
 scenario = SVGScenario("rifting.svg", regime="accordion", quiescence_time=300)
 scenario.write_all("my_scenario", particles_per_element=100)  # keyword arguments change param.txt
+```
+
+`SVGScenario` is built on the generic builders: `scenario.builder` is a `MandyocBuilder` with the interfaces
+and the material fields of the SVG, the temperature is solved by a `TemperatureFieldBuilder`
+(`solve_conductive_columns`) and the boundary velocities are given to a `VelocityFieldBuilder`. The input files are
+exported by `scenario.builder`, so they can be changed by script before writing:
+
+```python
+scenario = SVGScenario("rifting.svg")
+scenario.build_temperature()
+scenario.build_velocity()
+scenario.velocity_builder.set_region("top", [700e3, 900e3], vz=1.0e-11, mode="add")  # m/s
+scenario.builder.create_velocity_field(scenario.velocity_builder)
+scenario.builder.calculate_YSE()            # 2D fields in scenario.builder.DTree.fields
+scenario.write_all("my_scenario")
 ```
 
 The same from the command line (installed with the package):
@@ -56,10 +73,12 @@ tapioca-svg rifting.svg -o my_scenario --system linux --ncores 20 --mandyoc-opti
 
 ## Geometry and materials from SVG files
 
-Functions to read the domain and the units of the SVG and build the interfaces. The source code is in `inputs/svg.py`.
+Functions to read the domain and the units of the SVG and build the interfaces. The source code is in `inputs/svg/reader.py`.
+`layers_to_builder` turns the layers of the SVG into a `MandyocBuilder`, and `write_interfaces` exports its `interfaces.txt`
+(with the 13 parameters of `tapioca.DEFAULT_MATERIAL`).
 
 ```{eval-rst}
-.. currentmodule:: tapioca.inputs.svg
+.. currentmodule:: tapioca.inputs.svg.reader
 
 .. autosummary::
    :toctree: ../generated/
@@ -67,6 +86,7 @@ Functions to read the domain and the units of the SVG and build the interfaces. 
    read_domain
    read_units
    layers_from_svg
+   layers_to_builder
    write_interfaces
    plot_layers
    SVGInputError
@@ -81,22 +101,26 @@ tapioca-svg-interfaces scenario.svg -o interfaces.txt --plot layers.png
 
 ## Materials
 
-Layers of a Mandyoc scenario and their rheologies. The source code is in `inputs/materials.py`.
+Layers of a Mandyoc scenario and their rheologies. The source code is in `inputs/svg/materials.py`.
+The rheologies are instances of `LithologicalUnit` built from `tapioca.DEFAULT_MATERIALS` (`WET_OLIVINE`,
+`DRY_OLIVINE`, `WET_QUARTZ`, `WET_ANORTHITE`, `LINEAR_SALT`, `DRY_QUARTZ`, `BASALT`, `PLAGIOCLASE` and `AIR`);
+a material added to that dictionary is also available in the SVG descriptions.
+
+```python
+from tapioca.inputs.svg import WET_OLIVINE, LithologicalUnit, get_rheology
+
+WET_OLIVINE.params["V"]                       # parameters of interfaces.txt (rho, C, H, A, n, Q, V, k, ...)
+get_rheology("wet olivine") is WET_OLIVINE    # free-form names, as in the SVG descriptions
+my_olivine = LithologicalUnit("my_olivine", **{**WET_OLIVINE.params, "V": 15.0e-6})
+```
 
 ```{eval-rst}
-.. currentmodule:: tapioca.inputs.materials
+.. currentmodule:: tapioca.inputs.svg.materials
 
 .. autosummary::
    :toctree: ../generated/
 
    MandyocLayer
    LithologicalUnit
-   WetOlivine
-   DryOlivine
-   WetQuartz
-   DryQuartz
-   Basalt
-   Plagioclase
-   Air
    get_rheology
 ```

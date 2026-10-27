@@ -11,7 +11,7 @@ import xarray as xr
 from xarray import DataTree
 
 from ._variables import VARS_TYPES, PARAMS_TYPES, VARIABLES_LIST, INTERFACES_PARAMETERS,DEFAULT_MATERIAL,MATERIAL_PARAMETERS,PARAMETERS_UNITS,SEC_PER_YEAR
-from ._aux_functions import read_params, evaluate_params, ensure_directory_exists, _numba_diffusion_loop, _Druker_Prager_YS, _Byerlee_law_YS, _visc_dislocation_creep
+from ._aux_functions import read_params, evaluate_params, ensure_directory_exists, _numba_diffusion_loop, _conductive_columns, _Druker_Prager_YS, _Byerlee_law_YS, _visc_dislocation_creep
 
 #Mandyoc Scenario class
 class MandyocScen:
@@ -718,6 +718,7 @@ class MandyocBuilder:
         ----------
         path : str or Path
             The absolute or relative directory path where the generated scenario files will be exported.
+            It is created by the export functions.
         
         Nx : int
             The number of numerical nodes along the X-axis (horizontal).
@@ -798,7 +799,6 @@ class MandyocBuilder:
         self.path = path
         self.verbose = verbose
         self.thick_air = thick_air
-        ensure_directory_exists(self.path)
 
         self.Nx = Nx
         self.Nz = Nz
@@ -911,7 +911,7 @@ class MandyocBuilder:
             #create a default interface at the top of the model (ZMAX)
 
         else:
-            print(f'''Layer with ID {id_layer} is the top layer, it contains the initial material properties of the model that is above the last interface.\nYou can set material properties for this layer, but you cannot create an interface.''')
+            self._print_verbose(f'''Layer with ID {id_layer} is the top layer, it contains the initial material properties of the model that is above the last interface.\nYou can set material properties for this layer, but you cannot create an interface.''')
             
             interface_coords = np.ones(self.Nx) if self.dimensions==2 else np.ones((self.Nx,self.Ny))
             interface_coords *= 0
@@ -1049,7 +1049,7 @@ class MandyocBuilder:
             self._print_verbose('The interface is a line')
 
             if len(coord) == len(self.x):
-                print('The whole interfaces was provided, no need to interpolate')
+                self._print_verbose('The whole interfaces was provided, no need to interpolate')
                 #print(f"WARNING: The number of points provided ({len(coord)}) is different from the number of x-coordinates ({self.Nx}).)
                 return coord
             
@@ -1426,6 +1426,7 @@ class MandyocBuilder:
             Default is `'dataset'`. 
         '''
 
+        ensure_directory_exists(self.path)
         texts = {p: [] for p in MATERIAL_PARAMETERS}
         dic_params = {p: [] for p in MATERIAL_PARAMETERS}
         interfaces_list = []
@@ -1472,7 +1473,6 @@ class MandyocBuilder:
                 max_seq = len(seq.strip()) if len(seq.strip()) > max_seq else max_seq
 
         max_seq += 3
-        print(max_seq)
         with open(os.path.join(self.path,"interfaces.txt"), "w") as f:
             for line in base_text.split("\n")[:-1]:
                 all_seqs = line.strip().split('  ')
@@ -1517,6 +1517,7 @@ class MandyocBuilder:
         ind:int, optional
             Index of the exported temperature or velocity field. Default is 0.
         '''
+        ensure_directory_exists(self.path)
         name=field
         if len(header)==0: header='L1\nL2\nL3\nL4'
         
@@ -1602,6 +1603,7 @@ class MandyocBuilder:
         if not hasattr(self, 'params'):
             raise RuntimeError("Parameters not set. Call `set_params(...)` first.")
 
+        ensure_directory_exists(self.path)
         col = max(len(k) for k in self.params) + 4
         path = os.path.join(self.path, 'param.txt')
         with open(path, 'w') as f:
@@ -1746,6 +1748,32 @@ class VelocityFieldBuilder:
         if vx is None: vx = 0
         if vz is None: vz = 0
         self.scenario._print_verbose(f'({mode}) velocity in the {boundary}: from [{range[0]:.1f},{range[1]:.1f}], vx={vx:.3e}, vz={vz:.3e} {self.units}')
+
+        return self
+
+    def set_profile(self, boundary:str, vx:np.ndarray=None, vz:np.ndarray=None):
+        '''
+        This function sets the whole velocity profile of a boundary, e.g. the profiles of the 
+        SVG scenarios (tapioca.inputs.svg).
+
+        Parameters
+        ----------
+        boundary: str
+            The boundary that you recieve the imposed velocity ('top','bot','left','right).
+
+        vx: numpy.ndarray, optional
+            The Vx component along the boundary (z for 'left' and 'right', x for 'top' and 'bot').
+
+            Default is None.
+
+        vz: numpy.ndarray, optional
+            The Vz component along the boundary.
+
+            Default is None.
+        '''
+        mask = self._create_mask(values_range=None, boundary=boundary)
+        self._apply_veloc(mask, boundary, vx, vz, mode='set')
+        self.scenario._print_verbose(f'velocity profile set in the {boundary} boundary')
 
         return self
 
@@ -2308,3 +2336,74 @@ class TemperatureFieldBuilder:
             T_2d = np.tile(T_1d, (nx, 1))
             
         self.temperature.values = T_2d
+
+    def solve_conductive_columns(self, lithosphere_thickness:float|np.ndarray, time_max:float=2000.0e6,
+                                 dt_years:float=5000.0, t_pot:float=1350.0, delta_T:float=0.0,
+                                 kappa:float=1.0e-6, t_litho:float=1300.0,
+                                 air_thickness:float|np.ndarray=None):
+        '''
+        This function solves the 1D transient heat diffusion equation for each distinct column of 
+        the scenario (same lithosphere thickness and radiogenic heat profile), so the lithosphere can 
+        vary along x. It is the conductive model of the SVG scenarios (tapioca.inputs.svg).
+
+        The initial temperature is linear from 0 at the surface (base of the sticky air) to `t_litho` 
+        at the base of the lithosphere, limited by the adiabat of the asthenosphere. The sticky air 
+        and the asthenosphere keep their initial temperature during the diffusion.
+
+        Parameters
+        ----------
+        lithosphere_thickness: float or numpy.ndarray
+            The thickness of the lithosphere, constant or for each column (Nx).
+
+        time_max: float, optional
+            The total simulation time in years. 
+            
+            Default is 2000.0e6.
+
+        dt_years: float, optional
+            The time step size in years (explicit scheme, it must satisfy dt < dz²/(2 kappa)). 
+            
+            Default is 5000.0.
+
+        t_pot: float, optional
+            The potential temperature of the asthenosphere/mantle.
+            
+            Default is 1350.0.
+
+        delta_T: float, optional
+            Increase in the temperature of the asthenosphere.
+            
+            Default is 0.0.
+
+        kappa: float, optional
+            The thermal diffusivity (in m2/s), constant in the domain.
+            
+            Default is 1.0e-6.
+
+        t_litho: float, optional
+            The temperature at the base of the lithosphere in the initial guess.
+            
+            Default is 1300.0.
+
+        air_thickness: float or numpy.ndarray, optional
+            The thickness of the sticky air, constant or for each column (Nx). If None, the 
+            `thick_air` of the scenario is used.
+            
+            Default is None.
+        '''
+        self.t_pot = t_pot
+        self.lithosphere_thickness = lithosphere_thickness
+
+        depth = -self.temperature.z.values # from the top of the model
+        thickness_sa = np.broadcast_to(self.thick_air if(air_thickness is None) else air_thickness, (self.Nx,)).astype(float)
+        thickness_litho = np.broadcast_to(lithosphere_thickness, (self.Nx,)).astype(float)
+        H = self.H.transpose('z', 'x').values
+        num_steps = int(np.ceil(time_max / dt_years))
+
+        T, n_columns = _conductive_columns(depth, thickness_sa, thickness_litho, H,
+                                           dt=dt_years * SEC_PER_YEAR, num_steps=num_steps,
+                                           t_pot=t_pot, delta_T=delta_T, kappa=kappa, c_cap=self.c_cap,
+                                           alpha=self.alpha, g=self.g, t_litho=t_litho)
+
+        self.scenario._print_verbose(f"Conductive model solved for {n_columns} distinct column(s), {num_steps} steps.")
+        self.temperature.values = T if(self.temperature.dims == ('z', 'x')) else T.T
