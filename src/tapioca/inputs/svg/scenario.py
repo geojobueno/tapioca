@@ -48,6 +48,8 @@ from .reader import SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, laye
 
 __all__ = ["SVGScenario", "REGIMES"]
 
+## This variables should be in a dedicate file to auxiliary variables
+
 REGIMES = ['rifting', 'compression', 'accordion', 'quiescence']
 SEC_PER_YEAR = 365 * 24 * 3600
 MANTLE_RHEOLOGIES = ['wet_olivine', 'dry_olivine']
@@ -179,6 +181,7 @@ def layer_thickness(layers, label, ix):
     '''Total thickness [m] of the layers with the given label at column(s) ix.'''
     return sum(slot_thickness(layers, i, ix) for i in layer_indices(layers, label))
 
+## In mandyoc, the default is negative downwards. This function should be corrected
 def layer_grid(layers, z):
     '''
     Index of the layer at each node as a (Nz, Nx) array.
@@ -198,6 +201,7 @@ def parse_number_with_unit(text, units, name):
         raise SVGInputError(f"Could not read {name} = {text}.")
     return number * units[match.group(2)] if(match.group(2)) else number
 
+## This function can be replaced by read_param in aux_functions
 def _read_param_grid(folder):
     '''Nx, Nz, Lx, Lz from the first lines of the param.txt in folder.'''
     with open(os.path.join(folder, "param.txt"), "r") as f:
@@ -207,6 +211,7 @@ def _read_param_grid(folder):
         Lz = float(f.readline().split()[-1])
     return Nx, Nz, Lx, Lz
 
+## This function can be replaced by read_data in aux_functions
 def _read_step_data(prop, step, Nz, Nx, folder):
     '''Field prop_step.txt in folder as a (Nz, Nx) array.'''
     data = np.loadtxt(os.path.join(folder, f"{prop}_{step}.txt"), skiprows=2, unpack=True, comments="P")
@@ -407,6 +412,7 @@ class SVGScenario:
               after build_temperature() and build_velocity()
     '''
 
+    ## kappa is a material property now, not a constant for the whole scenario
     #Conductive model of the initial temperature
     TP = 1400.0 #mantle potential temperature [oC]
     DeltaT = 0.0 #increase in the mantle temperature [oC]
@@ -428,6 +434,8 @@ class SVGScenario:
     min_profile_width = 0.05 #fraction of Lx
     profile_colors = ['tab:orange', 'tab:purple', 'tab:green', 'tab:blue', 'r', 'k'] #the thickest lithosphere is the last one
 
+    ## because some parameters are useful only when a main option is "on", 
+    ## many of this parameters could be kwargs, such as "magmatism_extraction", "quiescence_time", "magmatism_Ts0"
     def __init__(self, svg_file, dx=None, dz=None, regime=None, velocity=None, moving_boundary=None,
                  quiescence_time=None, time_max=None, magmatism=None, magmatism_extraction=None,
                  magmatism_Ts0=None, preset_initial_temperature=None,
@@ -485,6 +493,8 @@ class SVGScenario:
             basalt.title = 'Basalt'
             basalt.color = 'xkcd:dark grey blue'
             self.layers.insert(len(self.layers)-1, basalt)
+        
+        ## It's necessary to create a convention for the layers ID, because there are the water and sediments layer 
         self.magmatic_layer = len(self.layers) - 2 #layer below the sticky air
 
         #index of the layer at each node, sticky air and lithosphere along x
@@ -622,6 +632,8 @@ class SVGScenario:
     # Profiles for the plots
     ###########################################################################
 
+    ## I think its a very complex function for a simple task, all data is stored inside the fields dataset
+    ## All these profiles could be obtained from the: MandyocBuilder.DTree.fields.ds
     def _find_profiles(self):
         '''
         Temperature and YSE profiles of the plots: one for each lithospheric domain (e.g. oceanic,
@@ -781,6 +793,10 @@ class SVGScenario:
         VZ = np.zeros_like(X)
         VZ[Z == 0] = vv
 
+        ## This code is redundat:
+        ## A 2D field is created, the profiles are passed to the VelocityFieldBuilder
+        ## and then the 2D fields are recreated again.
+
         #boundary profiles in the generic velocity builder, which creates the fields of the scenario builder
         v = VelocityFieldBuilder(self.builder, units='m/s')
         v.set_profile('left', vx=VX[:, 0], vz=VZ[:, 0])
@@ -817,6 +833,7 @@ class SVGScenario:
     # param.txt
     ###########################################################################
 
+    ## A good approach is to use the "set_params" method of MandyocBuilder
     def param_text(self, **params):
         '''
         Content of param.txt. Any parameter of the file can be changed with a keyword argument,
@@ -935,6 +952,7 @@ class SVGScenario:
     # Writing the files
     ###########################################################################
 
+    ## The base text of the scripts should be in a dedicated file (like aux_variables), not here
     def write_scripts(self, output_dir='.', system=None, ncores=None, mandyoc_options='',
                       petsc_dir=None, petsc_arch=None, mandyoc=None):
         '''
@@ -1062,6 +1080,7 @@ class SVGScenario:
     # Scenario infos
     ###########################################################################
 
+    ## This is a useful function that could be inside the MandyocBuilder class
     def infos(self, name=''):
         '''Description of the scenario (list of lines).'''
         layers, ix = self.layers, self.idx_profile
@@ -1112,6 +1131,7 @@ class SVGScenario:
             self.builder.calculate_YSE(sr=sr)
         return self.builder.DTree.fields.YSE.isel(x=ix).values
 
+    ## It's a good function to be inside the TemperatureFieldBuilder
     def plot_temperature(self, fname='initial_temperature.png'):
         '''Initial temperature field with the 600, 1000 and 1300 oC isotherms and the layer interfaces.'''
         T = self.T if(self.T is not None) else self.build_temperature()

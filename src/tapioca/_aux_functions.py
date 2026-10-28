@@ -236,6 +236,8 @@ def _numba_diffusion_loop(T, kappa, H, c_cap, dx, dz, dt, num_steps, cond):
             
     return T
 
+## This solution considers a constant diffusivity for the whole column
+## looks like a simplified version of the TemperatureFieldBuilder.solve_heat_diffusion1D
 def _conductive_columns(depth:np.ndarray, thickness_sa:np.ndarray, thickness_litho:np.ndarray, H:np.ndarray,
                         dt:float, num_steps:int, t_pot:float=1400.0, delta_T:float=0.0, kappa:float=1.0e-6,
                         c_cap:float=1250.0, alpha:float=3.28e-5, g:float=-10.0, t_litho:float=1300.0):

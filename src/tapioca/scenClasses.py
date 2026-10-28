@@ -2337,6 +2337,9 @@ class TemperatureFieldBuilder:
             
         self.temperature.values = T_2d
 
+
+    ## This solution considers a constant diffusivity for the whole column
+    ## looks like a simplified version of the TemperatureFieldBuilder.solve_heat_diffusion1D
     def solve_conductive_columns(self, lithosphere_thickness:float|np.ndarray, time_max:float=2000.0e6,
                                  dt_years:float=5000.0, t_pot:float=1350.0, delta_T:float=0.0,
                                  kappa:float=1.0e-6, t_litho:float=1300.0,
