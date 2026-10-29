@@ -265,11 +265,7 @@ class SVGScenario(SVGChecks, VerboseExtension):
 
     def _insert_basalt(self, index):
         '''Insert a basalt layer of zero thickness at index of the stack (below the layer at index); return its index.'''
-        basalt = MandyocLayer('basalt', BASALT,
-                              density=2900.0,
-                              effective_viscosity_scale_factor=1.0,
-                              radiogenic_heat_production=9.0e-11,
-                              Nx=self.Nx)
+        basalt = MandyocLayer('basalt', BASALT, Nx=self.Nx, rho=2900.0, C=1.0, H=9.0e-11)
         basalt.interface = np.copy(self.layers[index].interface) #base of basalt = base of the layer above it
         basalt.base_depth = basalt.interface.max()
         basalt.title = 'Basalt'
@@ -658,7 +654,7 @@ class SVGScenario(SVGChecks, VerboseExtension):
         lines.append(f'Layers (bottom to top) from {self.svg_file}, thickness at x = {self.x_profile/1.0e3:.0f} km:')
         for i, layer in enumerate(layers):
             lines.append(f"\t{i}: {layer.layer_label} ({layer.rheology_name}): h = {slot_thickness(layers, i, ix)/1.0e3:.1f} km, "
-                         f"C = {layer.effective_viscosity_scale_factor}, rho = {layer.density} kg/m3, H = {layer.radiogenic_heat_production:.4g} W/kg")
+                         f"C = {layer.params['C']}, rho = {layer.params['rho']} kg/m3, H = {layer.params['H']:.4g} W/kg")
         lines.append(f"\tlithosphere: {self.thickness_litho[ix]/1.0e3:.1f} km")
         lines.append(f"\tmagmatic layer: {self.magmatic_layer} ({layers[self.magmatic_layer].layer_label})")
         lines.append("Temperature and YSE profiles in numerical_setup.png:")
@@ -770,8 +766,8 @@ class SVGScenario(SVGChecks, VerboseExtension):
 
         legend_elements = []
         for label, layer in legend_layers.items():
-            legend_label = (f"{layer.title}\n{layer.effective_viscosity_scale_factor:g} x {layer.rheology_name.replace('_', ' ')}\n"
-                            + fr"$\rho$ = {layer.density:.0f} kg/m³" + f"\n$h$ = {legend_thickness(label)}")
+            legend_label = (f"{layer.title}\n{layer.params['C']:g} x {layer.rheology_name.replace('_', ' ')}\n"
+                            + fr"$\rho$ = {layer.params['rho']:.0f} kg/m³" + f"\n$h$ = {legend_thickness(label)}")
             legend_elements.append(Patch(facecolor=layer.color, edgecolor='black', label=legend_label))
         fig.subplots_adjust(bottom=0.25)
         axs.legend(handles=legend_elements, ncol=len(legend_elements), loc='lower center', bbox_to_anchor=(0.5, -0.45),

@@ -25,8 +25,9 @@ Each filled shape is a body of rock described by its object properties
                  Keys: C, rho, H (required), and A, n, Q, V, k, weakening_seed,
                  cohesion_min, cohesion_max, friction_angle_min and
                  friction_angle_max (optional, they override the values of the
-                 rheology in DEFAULT_MATERIALS). Long names such as
-                 density or radiogenic_heat_production are also accepted.
+                 rheology in DEFAULT_MATERIALS). The names of
+                 tapioca.INTERFACES_PARAMETERS (e.g. density, scale_factor,
+                 radiogenic_heat) are also accepted.
 
                  Optional: h = 120 km (or h = 120e3 m), the reference
                  thickness of the unit, so the drawing does not need to be in
@@ -115,7 +116,7 @@ from matplotlib.path import Path as MplPath
 from matplotlib.patches import Patch
 import svgelements as se
 
-from ..._variables import DEFAULT_MATERIAL, UNITS
+from ..._variables import DEFAULT_MATERIAL, INTERFACES_PARAMETERS, UNITS
 from ..._aux_functions import split_unit
 from ..generic_input_classes import MandyocBuilder
 from ..checks import SVGInputError, SVGChecks
@@ -138,19 +139,9 @@ EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiesce
                    "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature",
                    "temperature_solver", "water_layer", "magmatic_layer")  # settings of the experiment in the domain description
 
-## There is this same variable in aux_variables, with more properties.
-# key in the description -> attribute of MandyocLayer
-PROPERTY_KEYS = {
-    "C": "effective_viscosity_scale_factor",
-    "rho": "density",
-    "H": "radiogenic_heat_production",
-    "A": "pre_exponential_constant",
-    "n": "power_law_exponent",
-    "Q": "activation_energy",
-    "V": "activation_volume",
-}
-PROPERTY_KEYS.update({attr: attr for attr in list(PROPERTY_KEYS.values())})
-PROPERTY_KEYS.update({key: key for key in DEFAULT_MATERIAL if key not in PROPERTY_KEYS})  # k, cohesion_min, ...
+# key in the description -> parameter of interfaces.txt: the keys of DEFAULT_MATERIAL (rho, C, H, ...) and their
+# names in INTERFACES_PARAMETERS (density, scale_factor, radiogenic_heat, ...)
+PROPERTY_KEYS = {**{key: key for key in DEFAULT_MATERIAL}, **{name: key for key, name in INTERFACES_PARAMETERS.items()}}
 
 ###############################################################################
 # Functions
@@ -288,7 +279,7 @@ def read_setup(svg_file):
 def parse_description(text, where):
     '''
     Parse the description of a shape into
-    (rheology (LithologicalUnit), {MandyocLayer attribute: value}, reference thickness in m or None).
+    (rheology (LithologicalUnit), {parameter of DEFAULT_MATERIAL: value}, reference thickness in m or None).
     '''
     rheology, props, thickness = None, {}, None
     for line in text.splitlines():
@@ -320,7 +311,7 @@ def parse_description(text, where):
         rheology = get_rheology(rheology)
     except ValueError as err:
         raise SVGInputError(f"{where}: {err}")
-    missing = [s for s in ["C", "rho", "H"] if PROPERTY_KEYS[s] not in props]
+    missing = [s for s in ["C", "rho", "H"] if s not in props]
     if missing:
         raise SVGInputError(f"{where}: missing {', '.join(missing)} in the description.")
     return rheology, props, thickness
@@ -568,12 +559,15 @@ def remove_slivers(grid, under, dz, Lz, min_thickness, unit_names, verbose=True)
                   f"thinner than min_thickness = {min_thickness / 1e3:g} km): it takes the unit below it.")
     return grid, under
 
-## I think this function can be used to create the interfaces inside the MandyocBuilder.
-## PROBLEM: positive downwards ; Mandyoc is positive upwards
 def build_stack(grid, dz, Lz, unit_names):
     '''
     Return the stack of units (indices, bottom to top) and the base depth of each
     slot, an array (n_layers, Nx) in m (positive downwards).
+
+    Depths are positive downwards on purpose: the sample grid comes from the SVG, whose y axis grows
+    downwards (row 0 of grid is the top of the domain), and the whole reader works in depth. The
+    conversion to the convention of Mandyoc (z positive upwards, from -Lz to 0, row 0 at the base)
+    happens once, in layers_to_builder (z = -depth), which creates the interfaces of MandyocBuilder.
     '''
     Nzs, Nx = grid.shape
     if (grid < 0).any():
@@ -796,14 +790,7 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, setup_id=None, min_thickness
     unit_layers = []
     for i, name in enumerate(unit_names):
         u = units[name]
-        props = dict(u["props"])
-        layer = MandyocLayer(name, u["rheology"],
-                             density=props.pop("density"),
-                             effective_viscosity_scale_factor=props.pop("effective_viscosity_scale_factor"),
-                             radiogenic_heat_production=props.pop("radiogenic_heat_production"),
-                             Nx=Nx)
-        for attr, value in props.items():  # A, n, Q, V, k, cohesion_min, ... given in the description
-            setattr(layer, attr, value)
+        layer = MandyocLayer(name, u["rheology"], Nx=Nx, **u["props"])
         layer.title = u["title"] or name
         layer.color = colors.get(i, "#808080")
         layer.reference_thickness = u["thickness"]
@@ -823,7 +810,7 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, setup_id=None, min_thickness
         print("Layers (bottom to top):")
         for k, layer in enumerate(layers):
             print(f"  {k:2d}  {layer.layer_label:25s} {layer.rheology_name:12s} "
-                  f"C={layer.effective_viscosity_scale_factor:g} rho={layer.density:g} H={layer.radiogenic_heat_production:.4g}")
+                  f"C={layer.params['C']:g} rho={layer.params['rho']:g} H={layer.params['H']:.4g}")
         print(f"n_interfaces = {len(layers) - 1}   # put this in param.txt")
         print(f"Sampling: dx = {x[1] - x[0]:.1f} m, dz = {dz:.1f} m; mismatched samples of the drawing after rebuild: {mismatch}")
 
@@ -868,7 +855,7 @@ def layer_material(layer, seed_label="weak_seed"):
     description like the others; when it is not given, the layers labelled seed_label get 1 (initial strain).
     '''
     params = layer.material()
-    if layer.layer_label == seed_label and not hasattr(layer, "weakening_seed"):
+    if layer.layer_label == seed_label and "weakening_seed" not in layer.given:
         params["weakening_seed"] = 1.0
     return params
 
@@ -900,8 +887,8 @@ def plot_layers(layers, Lx, Lz, fname):
     for layer in layers[::-1]:
         unique.setdefault(layer.layer_label, layer)
     handles = [Patch(facecolor=layer.color, edgecolor="k",
-                     label=f"{layer.title}\n{layer.effective_viscosity_scale_factor:g} x {layer.rheology_name.replace('_', ' ')}\n"
-                           fr"$\rho$ = {layer.density:g} kg/m³")
+                     label=f"{layer.title}\n{layer.params['C']:g} x {layer.rheology_name.replace('_', ' ')}\n"
+                           fr"$\rho$ = {layer.params['rho']:g} kg/m³")
                for layer in unique.values()]
     fig.subplots_adjust(bottom=0.28)
     ax.legend(handles=handles, ncol=len(handles), loc="lower center", bbox_to_anchor=(0.5, -0.42),

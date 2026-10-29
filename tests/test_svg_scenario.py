@@ -61,8 +61,8 @@ def test_interfaces_txt(written):
     n_params = len(tp.MATERIAL_PARAMETERS)
     assert sorted(line.split()[0] for line in lines[:n_params]) == sorted(tp.MATERIAL_PARAMETERS)
     values = {line.split()[0]: [float(v) for v in line.split()[1:]] for line in lines[:n_params]}
-    assert values["rho"] == [layer.density for layer in scenario.layers]
-    assert values["C"] == [layer.effective_viscosity_scale_factor for layer in scenario.layers]
+    assert values["rho"] == [layer.params["rho"] for layer in scenario.layers]
+    assert values["C"] == [layer.params["C"] for layer in scenario.layers]
     seed = [i for i, layer in enumerate(scenario.layers) if layer.layer_label == scenario.seed_label]
     assert all(values["weakening_seed"][i] == (1.0 if i in seed else -1.0) for i in range(len(scenario.layers)))
     depths = np.loadtxt(lines[n_params:])

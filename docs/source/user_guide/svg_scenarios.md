@@ -58,7 +58,9 @@ h = 10 km
 `C` (viscosity scale factor), `rho` (density) and `H` (radiogenic heat production, W/kg) are required.
 `k`, `weakening_seed`, `cohesion_min`, `cohesion_max`, `friction_angle_min` and `friction_angle_max` are also
 accepted and, like `A`, `n`, `Q` and `V`, take the values of the rheology when they are not given:
-`interfaces.txt` has the 13 parameters of `tapioca.DEFAULT_MATERIAL`.
+`interfaces.txt` has the 13 parameters of `tapioca.DEFAULT_MATERIAL`. The keys are those of
+`DEFAULT_MATERIAL` (`rho`, `C`, `H`, ...); their names in `tapioca.INTERFACES_PARAMETERS` (`density`,
+`scale_factor`, `radiogenic_heat`, `thermal_diffusivity`, `weak_seed_strain`, ...) are also accepted.
 `A`, `n`, `Q` and `V` are optional and override the values of the rheology in `DEFAULT_MATERIALS` (the
 examples in `examples/svg_scenarios` give them, to keep the flow laws used before the materials were unified). A shape without description
 inherits the one of the group (e.g. an Inkscape layer) that contains it; shapes without any description

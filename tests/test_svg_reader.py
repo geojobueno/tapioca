@@ -30,8 +30,7 @@ def test_eval_number_accepts_only_arithmetic():
 def test_parse_description():
     rheology, props, thickness = parse_description("wet quartz\nC = 1.0\nrho = 2700\nH = 1e-10\nh = 25 km\ncohesion_max = 3e7", "test")
     assert rheology.name == "wet_quartz"
-    assert props == {"effective_viscosity_scale_factor": 1.0, "density": 2700.0,
-                     "radiogenic_heat_production": 1e-10, "cohesion_max": 3e7}
+    assert props == {"C": 1.0, "rho": 2700.0, "H": 1e-10, "cohesion_max": 3e7}
     assert thickness == 25e3
 
 
@@ -151,3 +150,10 @@ def test_other_versions_are_warned(tmp_path, capsys, old, new, warning):
     scenario = SVGScenario(str(svg), dx=10, dz=10, verbose=False)
     assert warning in capsys.readouterr().out
     assert any("tested: SVG 1.1, Inkscape 1.4" in line for line in scenario.infos())
+
+
+def test_names_of_interfaces_parameters_in_the_description():
+    """The long names of tapioca.INTERFACES_PARAMETERS are the same parameters as their keys."""
+    _, props, _ = parse_description("wet quartz\nscale_factor = 1.0\ndensity = 2700\nradiogenic_heat = 1e-10\n"
+                                    "thermal_diffusivity = 1e-6\nweak_seed_strain = 0.5", "test")
+    assert props == {"C": 1.0, "rho": 2700.0, "H": 1e-10, "k": 1e-6, "weakening_seed": 0.5}
