@@ -93,10 +93,18 @@ class SVGScenario(SVGChecks, VerboseExtension):
         second extension in accordion (which time_max sets when given) and quiescence_time (or 1000 Myr)
         in quiescence.
     magmatism, magmatism_extraction : str, optional
-        'on' or 'off'. Default: off. With both on, a basalt layer of zero thickness is added below the
-        sticky air to receive the extracted melt (magmatic_layer).
+        'on' or 'off'. Default: off. With both on, a basalt layer of zero thickness receives the extracted
+        melt (see magmatic_layer).
     magmatism_Ts0 : float, optional
         magmatism_Ts0 of param.txt [oC]. Default: 1080.
+    water_layer : str or int, optional
+        Label (or ID from the bottom) of the unit drawn as water, right below the sticky air. The surface (top of
+        the solid layers) is then its base. Default: none (no water).
+    magmatic_layer : str or int, optional
+        Label (or ID from the bottom) of the layer that receives the melt extracted by Mandyoc (magmatic_layer of
+        param.txt). Default: with magmatism and magmatism_extraction on, a basalt layer of zero thickness added at
+        the top of the solid layers (below the water if there is water, otherwise below the sticky air); otherwise
+        the top solid layer. A layer given here is used as it is, so no basalt layer is added.
     preset_initial_temperature : str, optional
         Folder (with temperature.nc, or param.txt and temperature_*.txt) or NetCDF file of a preliminary
         scenario (see tapioca.read_preset_temperature): the horizontal mean of its final
@@ -181,26 +189,26 @@ class SVGScenario(SVGChecks, VerboseExtension):
                                       min_thickness=self.min_thickness, verbose=verbose)
         self._check_layers(self.layers, svg_file, asthenosphere_label)
 
-        #Basalt layer with zero thickness just below the sticky air: it can not be drawn in the SVG and
-        #receives the melt extracted by Mandyoc (magmatic_layer in param.txt)
-        if(self.magmatism == 'on' and self.magmatism_extraction == 'on'):
-            basalt = MandyocLayer('basalt', BASALT,
-                                  density=2900.0,
-                                  effective_viscosity_scale_factor=1.0,
-                                  radiogenic_heat_production=9.0e-11,
-                                  Nx=self.Nx)
-            basalt.interface = np.copy(self.layers[-1].interface) #base of basalt = base of sticky air
-            basalt.base_depth = basalt.interface.max()
-            basalt.title = 'Basalt'
-            basalt.color = 'xkcd:dark grey blue'
-            self.layers.insert(len(self.layers)-1, basalt)
-        
-        ## It's necessary to create a convention for the layers ID, because there are the water and sediments layer 
-        self.magmatic_layer = len(self.layers) - 2 #layer below the sticky air
+        #water and magmatic layers: chosen by the user (label, or ID of the layer from the bottom), never guessed
+        self.water_layer = self._layer_index('water_layer', self._setting('water_layer', settings.get('water_layer'), None))
+        if(self.water_layer is not None and self.water_layer != len(self.layers) - 2):
+            self._fail(f"water_layer '{self.layers[self.water_layer].layer_label}' must be the unit right below the sticky air.")
+        magmatic_layer = self._layer_index('magmatic_layer', self._setting('magmatic_layer', settings.get('magmatic_layer'), None))
+        if(magmatic_layer is None and self.magmatism == 'on' and self.magmatism_extraction == 'on'):
+            #Basalt layer with zero thickness at the top of the solid layers (below the water, if there is water,
+            #otherwise below the sticky air): it can not be drawn in the SVG and receives the melt extracted by Mandyoc
+            magmatic_layer = self._insert_basalt(len(self.layers) - 1 if(self.water_layer is None) else self.water_layer)
+            if(self.water_layer is not None):
+                self.water_layer += 1
+        #magmatic_layer of param.txt: by default the top of the solid layers (below the water or the sticky air)
+        top_solid = len(self.layers) - 2 if(self.water_layer is None) else self.water_layer - 1
+        self.magmatic_layer = magmatic_layer if(magmatic_layer is not None) else top_solid
 
         #sticky air and lithosphere along x
-        self.thickness_sa = self.layers[-1].interface #base of the sticky air
-        self.surface_id = len(self.layers) - 2 #interface ID of the surface: top of the layer below the sticky air
+        #surface: top of the solid layers (base of the sticky air, or of the water); its interface ID is the
+        #ID of the layer below it (interface i is the top of layer i)
+        self.surface_id = len(self.layers) - 2 if(self.water_layer is None) else self.water_layer - 1
+        self.thickness_sa = self.layers[self.surface_id + 1].interface #depth of the surface
         self.idx_ast = max(layer_indices(self.layers, asthenosphere_label))
         self.thickness_litho = self.layers[self.idx_ast+1].interface - self.thickness_sa #surface to the top of the asthenosphere
         self.thickness_mantle = np.zeros(self.Nx) #lithospheric mantle (olivine rheologies above the asthenosphere)
@@ -235,6 +243,35 @@ class SVGScenario(SVGChecks, VerboseExtension):
             return self._experiment[name]
         self.source[name] = 'default'
         return default
+
+    def _layer_index(self, name, value):
+        '''Index (ID from the bottom) of the layer given by its label (the top slot of the unit) or its ID; None if value is None.'''
+        if(value is None):
+            return None
+        value = str(value).strip()
+        if(value.lstrip('-').isdigit()):
+            index = int(value)
+            if(not 0 <= index < len(self.layers) - 1):
+                self._fail(f"{name} = {index}: the layers below the sticky air have IDs 0 to {len(self.layers) - 2}.")
+            return index
+        indices = layer_indices(self.layers, value)
+        if(not indices):
+            self._fail(f"{name} = {value}: no unit labelled '{value}' in {self.svg_file}.")
+        return max(indices)
+
+    def _insert_basalt(self, index):
+        '''Insert a basalt layer of zero thickness at index of the stack (below the layer at index); return its index.'''
+        basalt = MandyocLayer('basalt', BASALT,
+                              density=2900.0,
+                              effective_viscosity_scale_factor=1.0,
+                              radiogenic_heat_production=9.0e-11,
+                              Nx=self.Nx)
+        basalt.interface = np.copy(self.layers[index].interface) #base of basalt = base of the layer above it
+        basalt.base_depth = basalt.interface.max()
+        basalt.title = 'Basalt'
+        basalt.color = 'xkcd:dark grey blue'
+        self.layers.insert(index, basalt)
+        return index
 
     def _read_settings(self, settings):
         where = f"Setting of {self.svg_file}"

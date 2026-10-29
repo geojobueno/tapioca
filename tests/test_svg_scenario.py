@@ -187,10 +187,66 @@ def test_preset_initial_temperature(tmp_path, n_params):
     assert T.min() == 0.0 and T.max() == pytest.approx(profile.max(), rel=0.05)
 
 
+WATER = """<rect id="water" inkscape:label="water" x="0" y="0" width="1600" height="45" style="fill:#4f9fd8;stroke:none">
+      <desc id="desc_water">air
+C = 1.0
+rho = 1000.0
+H = 0.0
+h = 2 km</desc>
+    </rect>
+    <rect id="air\""""
+
+
+@pytest.fixture
+def water_svg(tmp_path):
+    """The rifting example with a water layer (2 km) between the sticky air and the upper crust."""
+    svg = tmp_path / "rifting_water.svg"
+    svg.write_text(svg_path("rifting").read_text().replace('<rect id="air"', WATER, 1))
+    return svg
+
+
+def _labels(scenario):
+    return [layer.layer_label for layer in scenario.layers]
+
+
 def test_magmatism_extraction_adds_a_basalt_layer():
     scenario = build_scenario("rifting", magmatism="on", magmatism_extraction="on")
-    assert scenario.layers[-2].layer_label == "basalt"
+    assert _labels(scenario)[-2:] == ["basalt", "air"]
     assert scenario.magmatic_layer == len(scenario.layers) - 2
+
+
+def test_basalt_goes_below_the_water(water_svg):
+    with quiet():
+        scenario = SVGScenario(str(water_svg), dx=10, dz=10, verbose=False, water_layer="water",
+                               magmatism="on", magmatism_extraction="on")
+    assert _labels(scenario)[-3:] == ["basalt", "water", "air"]
+    assert scenario.magmatic_layer == len(scenario.layers) - 3 == scenario.surface_id
+    water = scenario.layers[scenario.water_layer]
+    np.testing.assert_allclose(scenario.thickness_sa, water.interface)  # the surface is the base of the water
+    np.testing.assert_allclose(water.interface - scenario.layers[-1].interface, 2e3)
+
+
+def test_water_without_basalt(water_svg):
+    with quiet():
+        scenario = SVGScenario(str(water_svg), dx=10, dz=10, verbose=False, water_layer="water")
+    assert _labels(scenario)[-2:] == ["water", "air"] and "basalt" not in _labels(scenario)
+    assert scenario.magmatic_layer == scenario.surface_id == len(scenario.layers) - 3
+
+
+def test_magmatic_layer_given_by_the_user():
+    """A layer of the SVG receives the melt: no basalt layer is added."""
+    scenario = build_scenario("rifting", magmatism="on", magmatism_extraction="on", magmatic_layer="upper_crust")
+    assert "basalt" not in _labels(scenario)
+    assert scenario.layers[scenario.magmatic_layer].layer_label == "upper_crust"
+    assert build_scenario("rifting", magmatic_layer=2).magmatic_layer == 2
+
+
+@pytest.mark.parametrize("settings, message", [({"water_layer": "lower_crust"}, "right below the sticky air"),
+                                               ({"water_layer": "ocean"}, "no unit labelled 'ocean'"),
+                                               ({"magmatic_layer": 99}, "IDs 0 to")])
+def test_water_and_magmatic_layer_errors(settings, message):
+    with pytest.raises(SVGInputError, match=message):
+        build_scenario("rifting", **settings)
 
 
 def test_missing_svg_is_an_error(tmp_path):
