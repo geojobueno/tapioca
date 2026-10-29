@@ -1874,6 +1874,9 @@ class TemperatureFieldBuilder:
             in i=0.
         """
         
+        ## NOTE (Claude): below the edges of a thick keel (e.g. examples/svg_scenarios/quiescence) the asthenosphere
+        ## is fixed to the adiabat of its own column, which can be up to ~40 oC colder than the lithosphere right above
+        ## it, heated sideways: a thin temperature inversion at the LAB that solve_heat_1D does not have.
         ## BUG (Claude, minor): print instead of self.scenario._print_verbose (also "Diagonals prepared" below,
         ## "Velocity is given in cm/y..." in VelocityFieldBuilder.__init__ and the messages of create_interface(-1)
         ## and _evaluate_interface_position), so they are printed with verbose=False.
