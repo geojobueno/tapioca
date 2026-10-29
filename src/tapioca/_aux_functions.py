@@ -10,9 +10,9 @@ from numba import jit
 
 from pathlib import Path
 
-from ._variables import SEC_PER_YEAR, VARIABLES_LIST, INTERFACES_PARAMETERS,PARAMS_TYPES
+from ._variables import SEC_PER_YEAR, VARIABLES_LIST, INTERFACES_PARAMETERS,PARAMS_TYPES,UNITS
 
-__all__ = ["read_params","evaluate_params","read_data","ensure_directory_exists","export_compressed_dataset","export_compressed_datatree",
+__all__ = ["read_params","evaluate_params","read_data","read_interfaces","split_unit","convert_units","ensure_directory_exists","export_compressed_dataset","export_compressed_datatree",
            "_numba_diffusion_loop",
            "spsolve_heat_col","build_diagonals_2D",
            "_Druker_Prager_YS","_Byerlee_law_YS","_visc_dislocation_creep"]
@@ -117,7 +117,9 @@ def read_data(file: str, Nx: int, Nz: int, veloc:bool=False, surface:bool=False)
     data = pd.read_csv(file, header=None, 
                        skiprows=2, comment='P')
     
-    data = data.to_numpy()
+    ## FIX (Claude, SVG): with pandas >= 3 (copy-on-write) to_numpy() returns a read-only array and the
+    ## assignment below raised "assignment destination is read-only"; .copy() makes it writable.
+    data = data.to_numpy().copy()
 
     if not(veloc) and not(surface):
         data[np.abs(data) < 1.0e-200] = 0 #converter numeros pequenos e grandes
@@ -132,6 +134,74 @@ def read_data(file: str, Nx: int, Nz: int, veloc:bool=False, surface:bool=False)
         vy = np.reshape(data[1::2], (Nx,Nz), order='F')
         data = (vx.T, vy.T)
     return data
+
+def read_interfaces(file:str|Path):
+    '''
+    Reads an `interfaces.txt` of Mandyoc (the counterpart of `MandyocBuilder.export_interfaces`).
+    The parameter lines (name followed by one value per layer) may be any subset of the
+    material parameters, e.g. the 7 parameters of older scenarios or the 13 of `DEFAULT_MATERIAL`.
+
+    Parameters
+    ----------
+    file : str or Path
+        The interfaces.txt file.
+
+    Returns
+    -------
+    dict
+        Material parameters: {name: np.array with one value per layer, from the bottom to the top}.
+    np.ndarray
+        Interfaces (Nx, n_interfaces): z of each interface (m, negative downwards), from the bottom to the top.
+    '''
+    params, rows = {}, []
+    with open(file, 'r') as f:
+        for line in f:
+            values = line.split()
+            if not values:
+                continue
+            try:
+                rows.append([float(v) for v in values])
+            except ValueError:
+                params[values[0]] = np.array([float(v) for v in values[1:]])
+    return params, np.array(rows, ndmin=2)
+
+def split_unit(text:str, quantity:str):
+    '''
+    Splits a text such as "120 km" or "1 cm/yr" into the number (text) and the factor of its unit in
+    `UNITS[quantity]` (to m, yr, cm/yr or oC). The factor is None if the text has no unit.
+    '''
+    units = UNITS[quantity]
+    text = str(text).strip()
+    for unit in sorted(units, key=len, reverse=True): # longest first: "Myr" before "yr"
+        if text.endswith(unit) and (len(text) == len(unit) or not text[-len(unit)-1].isalpha()):
+            return text[:-len(unit)].strip(), units[unit]
+    return text, None
+
+def convert_units(text:str, quantity:str, default:str=None):
+    '''
+    Converts a text with a number and a unit (e.g. "120 km", "1 cm/yr", "300 Myr") to the base
+    unit of the quantity in `UNITS` (m, yr, cm/yr or oC).
+
+    Parameters
+    ----------
+    text : str
+        Number followed by one of the units of `UNITS[quantity]`.
+    quantity : str
+        'length', 'time', 'velocity' or 'temperature'.
+    default : str, optional
+        Unit of a number given without unit. If None, the unit is required.
+
+    Returns
+    -------
+    float
+        The value in the base unit.
+    '''
+    number, factor = split_unit(text, quantity)
+    if factor is None:
+        if default is None:
+            raise ValueError(f"'{text}' needs a unit of {quantity}: {', '.join(UNITS[quantity])}")
+        factor = UNITS[quantity][default]
+    return float(number) * factor
 
 def ensure_directory_exists(folder_path: str|Path):
     """

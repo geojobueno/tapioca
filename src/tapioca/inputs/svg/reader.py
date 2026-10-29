@@ -110,7 +110,8 @@ from matplotlib.path import Path as MplPath
 from matplotlib.patches import Patch
 import svgelements as se
 
-from ..._variables import DEFAULT_MATERIAL
+from ..._variables import DEFAULT_MATERIAL, UNITS
+from ..._aux_functions import split_unit
 from ..generic_input_classes import MandyocBuilder
 from .materials import MandyocLayer, get_rheology
 
@@ -167,22 +168,30 @@ def eval_number(expr):
         raise ValueError(f"invalid number: {expr!r}")
     return _eval(ast.parse(expr.strip(), mode="eval"))
 
-## an idea is to create a dictionary with factors and call it to convert the units. it's avoid the many ifs:
-## something like: {km:1e3, m:1, cm:100}
-## the samething can be applied to areas (km2, m2, cm2, mm2, etc) 
+def parse_quantity(value, quantity, where, name, default_unit=None, positive=False):
+    '''
+    Read a number with a unit of tapioca.UNITS[quantity] (e.g. "120 km", "1 cm/yr", "300 Myr") and return it
+    in the base unit of the quantity (m, yr, cm/yr or oC). The number may be an expression (see eval_number).
+    Without unit, default_unit is used; if it is None, the unit is required.
+    '''
+    units = UNITS[quantity]
+    number, factor = split_unit(value, quantity)
+    if factor is None:
+        if default_unit is None:
+            raise SVGInputError(f"{where}: give the unit of {name} ({' or '.join(units)}), e.g. {name} = 1 {next(iter(units))}")
+        factor = units[default_unit]
+    try:
+        result = eval_number(number) * factor
+    except (ValueError, SyntaxError):
+        raise SVGInputError(f"{where}: could not read the value of {name} = {value}. Units: {', '.join(units)}")
+    if positive and result <= 0:
+        raise SVGInputError(f"{where}: {name} must be positive.")
+    return result
+
+
 def parse_thickness(value, where, name="h"):
     '''Read a length such as "120 km" or "120e3 m" and return it in m.'''
-    match = re.fullmatch(r"(.+?)\s*(km|m)", value.strip())
-    if match is None:
-        raise SVGInputError(f"{where}: give the unit of {name} (km or m), e.g. {name} = 120 km")
-    try:
-        number = eval_number(match.group(1))
-    except (ValueError, SyntaxError):
-        raise SVGInputError(f"{where}: could not read the value of {name} = {value}")
-    thickness = number * (1.0e3 if match.group(2) == "km" else 1.0)
-    if thickness <= 0:
-        raise SVGInputError(f"{where}: {name} must be positive.")
-    return thickness
+    return parse_quantity(value, "length", where, name, positive=True)
 
 
 def points_from_spacing(length, spacing, name):

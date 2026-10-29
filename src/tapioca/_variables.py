@@ -2,7 +2,7 @@ import numpy as np
 ## Next steps here: to lock dictionary with MappingProxyType class
 
 __all__ = ["VARIABLES_LIST","VARS_TYPES","PARAMS_TYPES",
-           "SEC_PER_YEAR","CM",
+           "SEC_PER_YEAR","CM","UNITS",
            "INTERFACES_PARAMETERS","DEFAULT_MATERIAL","MATERIAL_PARAMETERS","PARAMETERS_UNITS",
            "DEFAULT_MATERIALS"]
 
@@ -50,6 +50,14 @@ SEC_PER_YEAR:float = 60*60*24*365.25 # seconds per year
 
 CM:float = 1/2.54 # cm per inch -> convert plotting to centimeters by *cm 
 """float: Conversion factor of inches to centimeters. Useful to change matplotlib measures."""
+
+UNITS:dict = {
+    "length": {"km": 1.0e3, "m": 1.0},                                # to m
+    "time": {"Myr": 1.0e6, "My": 1.0e6, "kyr": 1.0e3, "yr": 1.0},      # to yr
+    "velocity": {"cm/yr": 1.0, "cm/y": 1.0, "mm/yr": 0.1, "mm/y": 0.1}, # to cm/yr
+    "temperature": {"oC": 1.0, "°C": 1.0, "C": 1.0},                  # to oC
+}
+"""dict: Conversion factors of the units accepted in text inputs (e.g. "120 km", "1 cm/yr") to the base unit of each quantity."""
 
 INTERFACES_PARAMETERS:dict = {
     "C": "scale_factor",

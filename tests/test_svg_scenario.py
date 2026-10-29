@@ -1,5 +1,6 @@
 """Tests of the SVG scenarios (tapioca.inputs.svg.SVGScenario) and of the command line tools."""
 
+import shutil
 import sys
 
 import numpy as np
@@ -10,7 +11,9 @@ from tapioca.inputs import MandyocBuilder, TemperatureFieldBuilder, VelocityFiel
 from tapioca.inputs.svg import SVGInputError, SVGScenario
 from tapioca.inputs.svg import cli, reader
 
-from conftest import SVG_SCENARIOS, build_scenario, quiet, svg_path
+from tapioca.inputs.svg.scenario import read_preset_temperature
+
+from conftest import CONTINENTAL_RIFT, SVG_SCENARIOS, build_scenario, quiet, svg_path
 
 
 @pytest.fixture(scope="module", params=list(SVG_SCENARIOS))
@@ -159,7 +162,29 @@ def test_param_txt_keyword_arguments(tmp_path):
         scenario.write_all(str(tmp_path), plots=False, scripts=False, particles_per_element=100)
     assert _read_params(tmp_path)["particles_per_element"] == 100
     with pytest.raises(SVGInputError, match="Unknown parameter"):
-        scenario.param_text(not_a_parameter=1)
+        scenario.parameters(not_a_parameter=1)
+
+
+@pytest.mark.parametrize("n_params", [7, 13])
+def test_preset_initial_temperature(tmp_path, n_params):
+    """Preliminary scenario with temperature.nc (read with MandyocScen) and an interfaces.txt of 7 or 13 parameters."""
+    for fname in ["param.txt", "temperature.nc"]:
+        shutil.copy(CONTINENTAL_RIFT / fname, tmp_path / fname)
+    lines = (CONTINENTAL_RIFT / "interfaces.txt").read_text().splitlines()
+    if n_params == 13:  # the 6 parameters added to interfaces.txt with the 13 of DEFAULT_MATERIAL
+        n_layers = len(lines[0].split()) - 1
+        lines = lines[:7] + [f"{key} " + " ".join([str(tp.DEFAULT_MATERIAL[key])] * n_layers)
+                             for key in tp.MATERIAL_PARAMETERS[7:]] + lines[7:]
+    (tmp_path / "interfaces.txt").write_text("\n".join(lines) + "\n")
+    depth, profile, sa, litho, source = read_preset_temperature(str(tmp_path))
+    assert np.all(np.diff(depth) > 0) and profile.max() > 1300
+    assert sa == pytest.approx(40e3) and litho > 0
+    assert "interfaces from" in source
+    scenario = build_scenario("rifting", preset_initial_temperature=str(tmp_path))
+    with quiet():
+        T = scenario.build_temperature()
+    assert scenario.thickness_litho_preset == litho
+    assert T.min() == 0.0 and T.max() == pytest.approx(profile.max(), rel=0.05)
 
 
 def test_magmatism_extraction_adds_a_basalt_layer():

@@ -43,16 +43,20 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
+from ..._variables import SEC_PER_YEAR, PARAMS_TYPES
+from ..._aux_functions import read_params, read_data, read_interfaces
+from ...scenClasses import MandyocScen
 from ..generic_input_classes import TemperatureFieldBuilder, VelocityFieldBuilder
+from ._variables import DEFAULT_PARAMS
 from .materials import MandyocLayer, BASALT
-from .reader import SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, layers_to_builder, points_from_spacing
+from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, layers_to_builder,
+                     points_from_spacing, parse_quantity)
 
 __all__ = ["SVGScenario", "REGIMES"]
 
 ## This variables should be in a dedicate file to auxiliary variables
 
 REGIMES = ['rifting', 'compression', 'accordion', 'quiescence']
-SEC_PER_YEAR = 365 * 24 * 3600
 MANTLE_RHEOLOGIES = ['wet_olivine', 'dry_olivine']
 SYSTEMS = ['linux', 'mac']
 
@@ -191,37 +195,6 @@ def layer_grid(layers, z):
     bases = np.array([layer.interface for layer in layers[1:]]) #(n_layers-1, Nx)
     return (z[:, None, None] < bases[None, :, :]).sum(axis=1)
 
-def parse_number_with_unit(text, units, name):
-    '''Read a number with an optional unit, e.g. "1 cm/yr", and return it in the unit of factor 1 of units ({unit: factor}).'''
-    match = re.fullmatch(r"\s*([-+0-9.eE]+)\s*([A-Za-z/]*)\s*", str(text))
-    if(match is None or (match.group(2) and match.group(2) not in units)):
-        raise SVGInputError(f"Could not read {name} = {text}. Units: {', '.join(units)}")
-    try:
-        number = float(match.group(1))
-    except ValueError:
-        raise SVGInputError(f"Could not read {name} = {text}.")
-    return number * units[match.group(2)] if(match.group(2)) else number
-
-## This function can be replaced by read_param in aux_functions
-def _read_param_grid(folder):
-    '''Nx, Nz, Lx, Lz from the first lines of the param.txt in folder.'''
-    with open(os.path.join(folder, "param.txt"), "r") as f:
-        Nx = int(f.readline().split()[-1])
-        Nz = int(f.readline().split()[-1])
-        Lx = float(f.readline().split()[-1])
-        Lz = float(f.readline().split()[-1])
-    return Nx, Nz, Lx, Lz
-
-## This function can be replaced by read_data in aux_functions
-def _read_step_data(prop, step, Nz, Nx, folder):
-    '''Field prop_step.txt in folder as a (Nz, Nx) array.'''
-    data = np.loadtxt(os.path.join(folder, f"{prop}_{step}.txt"), skiprows=2, unpack=True, comments="P")
-    return np.reshape(data, (Nz, Nx))
-
-
-## This function should be in _aux_functions. The correct solution is to call the 
-## `MandyocScenario` to load the temperature field and then extract the desired variables.
-## In this way, is not necessary to load all params and check all those settings.
 def read_preset_temperature(path):
     '''
     Horizontal mean of the final temperature field of a preliminary scenario.
@@ -229,8 +202,9 @@ def read_preset_temperature(path):
     Parameters
     ----------
     path: str
-        Folder of the preliminary scenario (with _output_temperature.nc, or with param.txt and temperature_*.txt)
-        or the _output_temperature.nc file itself.
+        Folder of the preliminary scenario, with temperature.nc (read with MandyocScen) or with param.txt and the
+        temperature_*.txt of Mandyoc, or a NetCDF file with its temperature (e.g. _output_temperature.nc).
+        The interfaces.txt of the folder (or of a folder inputs* in it) gives its sticky air and lithosphere.
 
     Returns
     -------
@@ -241,30 +215,31 @@ def read_preset_temperature(path):
     source: description of the field used
     '''
     folder = os.path.dirname(path) if(os.path.isfile(path)) else path
-    nc_file = path if(os.path.isfile(path)) else os.path.join(folder, '_output_temperature.nc')
-    ## this function looks for "_output_temperature.nc", but the default name for netcdf is: temperature.nc (meshes2netcdf.jl)
-    ## use the `MandyocScenario` to read the results avoid this error
 
-    if(os.path.isfile(nc_file)):
-        dataset = xr.open_dataset(nc_file)
-        temperature = dataset.temperature.isel(time=-1) #(x, z), final step
-        depth = -dataset.z.values
-        profile = temperature.mean(dim='x').values
-        source = f"{nc_file} (time = {float(dataset.time[-1]):g} Myr)"
+    if(os.path.isfile(path)): #NetCDF file with the temperature
+        with xr.open_dataset(path) as dataset:
+            temperature = dataset.temperature.isel(time=-1)
+            z, profile = temperature.z.values, temperature.mean(dim='x').values
+            source = f"{path} (time = {float(dataset.time[-1]):g} Myr)"
+    elif(os.path.isfile(os.path.join(folder, 'temperature.nc'))):
+        scenario = MandyocScen(folder, variables='temperature')
+        temperature = scenario.DTree['/mesh/original'].temperature.isel(time=-1)
+        z, profile = temperature.z.values, temperature.mean(dim='x').values
+        source = f"{folder}/temperature.nc (time = {float(temperature.time):g} Myr)"
     else:
         if(not os.path.isfile(os.path.join(folder, 'param.txt'))):
-            raise SVGInputError(f"preset_initial_temperature: no _output_temperature.nc nor param.txt in {folder}")
-        Nx_aux, Nz_aux, Lx_aux, Lz_aux = _read_param_grid(folder)
+            raise SVGInputError(f"preset_initial_temperature: no temperature.nc nor param.txt in {folder}")
+        params = read_params(os.path.join(folder, 'param.txt'))
         steps = [int(m.group(1)) for m in (re.fullmatch(r'temperature_(\d+)\.txt', os.path.basename(f))
                  for f in glob.glob(os.path.join(folder, 'temperature_*.txt'))) if m]
         if(len(steps) == 0):
             raise SVGInputError(f"preset_initial_temperature: no temperature_*.txt in {folder}")
-        step_final = max(steps) #step of final thermal structure
-        Datai = _read_step_data('temperature', step_final, Nz_aux, Nx_aux, folder) #(Nz, Nx), from the bottom to the top
-        depth = np.linspace(Lz_aux, 0, Nz_aux)
-        profile = np.mean(Datai, axis=1)
-        source = f"{folder}/temperature_{step_final}.txt"
+        fname = os.path.join(folder, f"temperature_{max(steps)}.txt") #final thermal structure
+        z = np.linspace(-params['lz'], 0, params['nz'])
+        profile = np.mean(read_data(fname, params['nx'], params['nz']), axis=1) #(Nz, Nx), from the bottom to the top
+        source = fname
 
+    depth = -z
     order = np.argsort(depth)
     depth, profile = depth[order], profile[order]
 
@@ -274,13 +249,7 @@ def read_preset_temperature(path):
     thickness_sa, thickness_litho = None, None
     for fname in [os.path.join(folder, 'interfaces.txt')] + sorted(glob.glob(os.path.join(folder, 'inputs*', 'interfaces.txt'))):
         if(os.path.isfile(fname)):
-            try:
-                interfaces_preset = -np.loadtxt(fname, skiprows=7, ndmin=2)
-            except ValueError:
-                continue
-            def most_common(values):
-                v, c = np.unique(np.round(values, -2), return_counts=True)
-                return v[np.argmax(c)]
+            interfaces_preset = -read_interfaces(fname)[1] #depth of the interfaces (Nx, n_interfaces)
             thickness_sa = most_common(interfaces_preset[:, -1])
             thickness_litho = most_common(interfaces_preset[:, 0]) - thickness_sa
             source += f", interfaces from {fname}"
@@ -289,6 +258,11 @@ def read_preset_temperature(path):
         thickness_sa = depth[max(np.argmax(profile > 1.0) - 1, 0)]
 
     return depth, profile, thickness_sa, thickness_litho, source
+
+def most_common(values, decimals=-2):
+    '''Most common value of values rounded to decimals (default: 100 m).'''
+    v, c = np.unique(np.round(values, decimals), return_counts=True)
+    return v[np.argmax(c)]
 
 ## Probably the current `TemperatureFieldBuilder` can be called to adapt the preset temperature. 
 ## the surface and LAB interfaces inside the builder could remove the complicated loop inside this function
@@ -559,7 +533,8 @@ class SVGScenario:
     def _read_settings(self, regime, velocity, moving_boundary, quiescence_time, time_max,
                        magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature,
                        temperature_solver):
-        time_units = {'Myr': 1.0, 'My': 1.0, 'kyr': 1.0e-3, 'yr': 1.0e-6}
+        where = f"Setting of {self.svg_file}"
+        read = lambda name, value, quantity, unit: parse_quantity(value, quantity, where, name, default_unit=unit)
 
         self.regime = str(self._setting('regime', regime, 'rifting')).strip().lower()
         if(self.regime not in REGIMES):
@@ -567,7 +542,7 @@ class SVGScenario:
 
         self.velocity = self._setting('velocity', velocity, 1.0) #cm/yr
         if(isinstance(self.velocity, str)):
-            self.velocity = parse_number_with_unit(self.velocity, {'cm/yr': 1.0, 'cm/y': 1.0, 'mm/yr': 0.1, 'mm/y': 0.1}, 'velocity')
+            self.velocity = read('velocity', self.velocity, 'velocity', 'cm/yr')
 
         self.moving_boundary = str(self._setting('moving_boundary', moving_boundary, 'right')).strip().lower()
         if(self.moving_boundary not in ['left', 'right', 'symmetric']):
@@ -577,11 +552,11 @@ class SVGScenario:
 
         time_max = self._setting('time_max', time_max, None) #Myr
         if(isinstance(time_max, str)):
-            time_max = parse_number_with_unit(time_max, time_units, 'time_max')
+            time_max = read('time_max', time_max, 'time', 'Myr') / 1.0e6
 
         self.quiescence_time = self._setting('quiescence_time', quiescence_time, 0.0) #Myr
         if(isinstance(self.quiescence_time, str)):
-            self.quiescence_time = parse_number_with_unit(self.quiescence_time, time_units, 'quiescence_time')
+            self.quiescence_time = read('quiescence_time', self.quiescence_time, 'time', 'Myr') / 1.0e6
         if(self.quiescence_time < 0):
             raise SVGInputError(f"quiescence_time must not be negative ({self.quiescence_time:g} Myr).")
         if(self.regime in ['rifting', 'compression'] and self.source['quiescence_time'] != 'default'):
@@ -591,7 +566,7 @@ class SVGScenario:
         self.magmatism_extraction = self._on_off('magmatism_extraction', magmatism_extraction)
         self.magmatism_Ts0 = self._setting('magmatism_Ts0', magmatism_Ts0, 1080.0) #oC
         if(isinstance(self.magmatism_Ts0, str)):
-            self.magmatism_Ts0 = parse_number_with_unit(self.magmatism_Ts0, {'oC': 1.0, 'C': 1.0}, 'magmatism_Ts0')
+            self.magmatism_Ts0 = read('magmatism_Ts0', self.magmatism_Ts0, 'temperature', 'oC')
         self.magmatism_Ts0 = float(self.magmatism_Ts0)
         if(self.magmatism_extraction == 'on' and self.magmatism == 'off'):
             print("Warning: magmatism_extraction is on but magmatism is off.")
@@ -791,123 +766,25 @@ class SVGScenario:
     # param.txt
     ###########################################################################
 
-    ## A good approach is to use the "set_params" method of MandyocBuilder
-    ## I think it's complicated to assume default parameters for velocity, r_tol, particles, etc
-    ## The users should set it for their own scenarios.
-    ## also, all params (and some future params) are in `PARAMS_TYPES` in ..._variables.py
-    def param_text(self, **params):
+    def parameters(self, **params):
         '''
-        Content of param.txt. Any parameter of the file can be changed with a keyword argument,
-        e.g. param_text(particles_per_element=100, rheology_model=9).
+        Parameters of param.txt (dict): DEFAULT_PARAMS (tapioca.inputs.svg._variables) and those of the scenario
+        (time_max, velocity and magmatism settings). The grid (nx, nz, lx, lz) and n_interfaces are set by
+        MandyocBuilder.set_params. Any parameter of PARAMS_TYPES can be changed with a keyword argument,
+        e.g. parameters(particles_per_element=100, rheology_model=9).
         '''
-        text = f"""
-        nx = {self.Nx}
-        nz = {self.Nz}
-        lx = {self.Lx}
-        lz = {self.Lz}
-        # Simulation options
-        multigrid                           = 1             # ok -> soon to be on the command line only
-        solver                              = direct        # default is direct [direct/iterative]
-        denok                               = 1e-14       # default is 1.0E-4
-        particles_per_element               = 40          # default is 81
-        surface_particles_per_element       = 40           # default is 2
-        particles_perturb_factor            = 0.7           # default is 0.5 [values are between 0 and 1]
-        rtol                                = 1.0e-7        # the absolute size of the residual norm (relevant only for iterative methods), default is 1.0E-5
-        RK4                                 = Euler         # default is Euler [Euler/Runge-Kutta]
-        Xi_min                              = 1.0e-5       # default is 1.0E-14
-        random_initial_strain               = 0.3           # default is 0.0
-        pressure_const                      = -1.0          # default is -1.0 (not used) - useful only in horizontal 2D models
-        initial_dynamic_range               = True         # default is False [True/False]
-        periodic_boundary                   = False         # default is False [True/False]
-        high_kappa_in_asthenosphere         = False         # default is False [True/False]
-        K_fluvial                           = 2.0e-7        # default is 2.0E-7
-        m_fluvial                           = 1.0           # default is 1.0
-        sea_level                           = 0.0           # default is 0.0
-        basal_heat                          = 0.0          # default is -1.0
-        # Surface processes
-        sp_surface_tracking                 = True         # default is False [True/False]
-        sp_surface_processes                = False        # default is False [True/False]
-        plot_sediment                       = False         # default is False [True/False]
-        a2l                                 = True          # default is True [True/False]
-        free_surface_stab                   = True         # default is True [True/False]
-        theta_FSSA                          = 0.5          # default is 0.5 (only relevant when free_surface_stab = True)
-        # Time constrains
-        step_max                            = 800000        # Maximum time-step of the simulation
-        time_max                            = {self.time_max}    # Maximum time of the simulation [years]
-        dt_max                              = 10000.0      # Maximum time between steps of the simulation [years]
-        step_print                          = 50  # Make file every <step_print>
-        sub_division_time_step              = 0.5           # default is 1.0
-        initial_print_step                  = 0             # default is 0
-        initial_print_max_time              = 1.0e6         # default is 1.0E6 [years]
-        # Viscosity
-        viscosity_reference                 = 1.0e26        # Reference viscosity [Pa.s]
-        viscosity_max                       = 1.0e25        # Maximum viscosity [Pa.s]
-        viscosity_min                       = 1.0e18        # Minimum viscosity [Pa.s]
-        viscosity_per_element               = constant      # default is variable [constant/variable]
-        viscosity_mean_method               = arithmetic      # default is harmonic [harmonic/arithmetic]
-        viscosity_dependence                = pressure      # default is depth [pressure/depth]
-        # External ASCII inputs/outputs
-        interfaces_from_ascii               = True          # default is False [True/False]
-        n_interfaces                        = {len(self.layers)-1}           # Number of interfaces int the interfaces.txt file
-        variable_bcv                        = {self.variable_bcv} #False         # default is False [True/False]
-        temperature_from_ascii              = True         # default is False [True/False]
-        velocity_from_ascii                 = {self.velocity_from_ascii} #False      # default is False [True/False]
-        binary_output                       = False         # default is False [True/False]
-        sticky_blanket_air                  = True         # default is False [True/False]
-        # precipitation_profile_from_ascii    = False         # default is False [True/False]
-        # climate_change_from_ascii           = False         # default is False [True/False]
-        print_step_files                    = True          # default is True [True/False]
-        checkered                           = False         # Print one element in the print_step_files (default is False [True/False])
-        geoq                                = on            # ok
-        geoq_fac                            = 100.0           # ok
-        # Physical parameters
-        temperature_difference              = 1500.         # ok
-        thermal_expansion_coefficient       = 3.28e-5       # ok
-        thermal_diffusivity_coefficient     = 1.0e-6 #0.75e-6       #default is 1.0e-6        # ok
-        gravity_acceleration                = 10.0          # ok
-        density_mantle                      = 3300.         # ok
-        external_heat                       = 0.0e-12       # ok
-        heat_capacity                       = 1250.         # ok #default is 1250
-        non_linear_method                   = on            # ok
-        adiabatic_component                 = on            # ok
-        radiogenic_component                = on            # ok
-        magmatism                           = {self.magmatism}           # ok
-        magmatism_extraction = {self.magmatism_extraction}
-        magmatism_Ts0 = {self.magmatism_Ts0} #oC
-        export_lithology = True
-        magmatic_layer = {self.magmatic_layer}
-        # Velocity boundary conditions
-        top_normal_velocity                 = fixed         # ok
-        top_tangential_velocity             = free          # ok
-        bot_normal_velocity                 = fixed         # ok
-        bot_tangential_velocity             = free          # ok
-        left_normal_velocity                = fixed         # ok
-        left_tangential_velocity            = fixed          # ok
-        right_normal_velocity               = fixed         # ok
-        right_tangential_velocity           = fixed         # ok
-        surface_velocity                    = 0.0e-2        # ok
-        multi_velocity                      = False         # default is False [True/False]
-        # Temperature boundary conditions
-        top_temperature                     = fixed         # ok
-        bot_temperature                     = fixed         # ok
-        left_temperature                    = fixed         # ok
-        right_temperature                   = fixed         # ok
-        rheology_model                      = 19             # ok
-
-        T_initial                           = 3             # ok
-        """
-        lines = []
-        used = set()
-        for line in text.split("\n"):
-            key = line.split("=")[0].strip()
-            if("=" in line and not line.strip().startswith("#") and key in params):
-                line = f"{key} = {params[key]}"
-                used.add(key)
-            lines.append(line)
-        unknown = set(params) - used
+        unknown = [key for key in params if key not in PARAMS_TYPES]
         if(unknown):
             raise SVGInputError(f"Unknown parameter(s) of param.txt: {', '.join(sorted(unknown))}")
-        return "\n".join(lines)
+        return {**DEFAULT_PARAMS,
+                'time_max': self.time_max,
+                'variable_bcv': self.variable_bcv,
+                'velocity_from_ascii': self.velocity_from_ascii,
+                'magmatism': self.magmatism,
+                'magmatism_extraction': self.magmatism_extraction,
+                'magmatism_Ts0': self.magmatism_Ts0,
+                'magmatic_layer': self.magmatic_layer,
+                **params}
 
     ###########################################################################
     # Writing the files
@@ -989,7 +866,7 @@ class SVGScenario:
         (infos_<folder>.txt), a copy of the SVG and the figures numerical_setup.png and initial_temperature.png.
         With scripts, also the run script of Mandyoc for system ('linux' or 'mac'), 0_organize_outputs.sh and
         zipper.sh (see write_scripts).
-        Keyword arguments change parameters of param.txt (see param_text).
+        Keyword arguments change parameters of param.txt (see parameters).
         '''
         os.makedirs(output_dir, exist_ok=True)
         path = lambda fname: os.path.join(output_dir, fname)
@@ -1002,7 +879,7 @@ class SVGScenario:
         builder = self.builder
         builder.path = output_dir
         builder.export_interfaces(export='none')
-        builder.set_params(params_str=self.param_text(**params))
+        builder.set_params(**self.parameters(**params))
         builder.export_params()
 
         if(self.T is None):
