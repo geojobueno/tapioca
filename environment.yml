@@ -8,8 +8,8 @@
 #   conda activate tapioca
 #   pip install -e .          # na raiz do repositório tapioca
 #
-# Fora do conda: os cenários SVG (tapioca.inputs.svg) são lidos como SVG 1.1 salvos pelo
-# Inkscape 1.4 (testado com Inkscape 1.4.4); outras versões são lidas com um aviso.
+# Not installed by conda: the SVG scenarios (tapioca.inputs.svg) are read as SVG 1.1 files saved by
+# Inkscape 1.4 (tested with Inkscape 1.4.4); other versions are read with a warning.
 name: tapioca
 channels:
   - conda-forge
