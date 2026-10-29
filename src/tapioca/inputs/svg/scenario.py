@@ -44,11 +44,12 @@ from matplotlib.patches import Patch
 
 from ..._variables import SEC_PER_YEAR, PARAMS_TYPES
 from ..._aux_functions import find_nearest, read_preset_temperature, adapt_preset_temperature
-from ..generic_input_classes import TemperatureFieldBuilder, VelocityFieldBuilder
+from ..generic_input_classes import TemperatureFieldBuilder, VelocityFieldBuilder, VerboseExtension
+from ..checks import SVGChecks
 from ._variables import (REGIMES, MANTLE_RHEOLOGIES, SYSTEMS, DEFAULT_PARAMS, ORGANIZE_SCRIPT, RUN_SCRIPT,
                          RUN_LAUNCHER, ZIP_SCRIPT)
 from .materials import MandyocLayer, BASALT
-from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, layers_to_builder,
+from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, EXPERIMENT_KEYS, read_domain, layers_from_svg, layers_to_builder,
                      points_from_spacing, parse_quantity, layer_indices, slot_thickness, layer_thickness)
 
 __all__ = ["SVGScenario", "REGIMES"]
@@ -57,7 +58,7 @@ __all__ = ["SVGScenario", "REGIMES"]
 # Scenario builder
 ###############################################################################
 
-class SVGScenario:
+class SVGScenario(SVGChecks, VerboseExtension):
     '''
     Mandyoc scenario drawn in an SVG file.
 
@@ -71,6 +72,10 @@ class SVGScenario:
         SVG file with the scenario.
     dx, dz : float, optional
         Horizontal and vertical resolution [km] (default: from the SVG).
+
+    Settings of the numerical experiment (keyword arguments, see reader.EXPERIMENT_KEYS); each one overrides the
+    setting of the setup shape of the SVG. Numbers may be given with units, as in the SVG (e.g. '1 cm/yr'):
+
     regime : str, optional
         'rifting' (extension), 'compression' (convergence), 'accordion' (extension, convergence,
         quiescence and extension again, as in M300) or 'quiescence' (no velocity at the boundaries).
@@ -101,6 +106,9 @@ class SVGScenario:
         Steady-state conduction in the lithosphere of the conductive model: '2D' (the whole lithosphere at once,
         so heat also flows sideways where the layers change along x) or 'columns' (each column alone).
         Default: 2D.
+
+    Other parameters:
+
     asthenosphere_label, seed_label : str
         Labels of the asthenosphere and of the weak seed in the SVG.
     sampling : float
@@ -141,28 +149,19 @@ class SVGScenario:
     min_profile_width = 0.05 #fraction of Lx
     profile_colors = ['tab:orange', 'tab:purple', 'tab:green', 'tab:blue', 'r', 'k'] #the thickest lithosphere is the last one
 
-    ## because some parameters are useful only when a main option is "on", 
-    ## many of this parameters could be kwargs, such as "magmatism_extraction", "quiescence_time", "magmatism_Ts0"
-    def __init__(self, svg_file, dx=None, dz=None, regime=None, velocity=None, moving_boundary=None,
-                 quiescence_time=None, time_max=None, magmatism=None, magmatism_extraction=None,
-                 magmatism_Ts0=None, preset_initial_temperature=None, temperature_solver=None,
-                 asthenosphere_label='asthenosphere', seed_label='weak_seed', sampling=100.0, min_thickness=None,
-                 verbose=True):
+    def __init__(self, svg_file, dx=None, dz=None, asthenosphere_label='asthenosphere', seed_label='weak_seed',
+                 sampling=100.0, min_thickness=None, verbose=True, **settings):
 
         self.verbose = verbose
-        self.svg_file = svg_file
-        if(not os.path.isfile(svg_file)):
-            raise SVGInputError(f"SVG file not found: {svg_file}")
-
-        domain = read_domain(svg_file)
-        if(domain is None):
-            raise SVGInputError(f"No shape labelled '{SETUP_LABEL}' in {svg_file}. Draw a rectangle over the model domain, "
-                                f"label it '{SETUP_LABEL}' and write Lx, Lz, dx and dz in its description.")
+        self.svg_file = self._check_file('SVG file', svg_file)
+        self._check_keys('setting', settings, EXPERIMENT_KEYS)
+        domain = self._check_setup(read_domain(svg_file), svg_file, SETUP_LABEL)
 
         #domain and resolution
         self.Lx, self.Lz = domain['Lx'], domain['Lz']
         self.Nx = points_from_spacing(self.Lx, dx * 1.0e3, 'dx') if(dx) else domain['Nx']
         self.Nz = points_from_spacing(self.Lz, dz * 1.0e3, 'dz') if(dz) else domain['Nz']
+        self._check_domain(self.Lx, self.Lz, self.Nx, self.Nz)
         self.x = np.linspace(0, self.Lx, self.Nx)
         self.z = np.linspace(self.Lz, 0, self.Nz)
         self.X, self.Z = np.meshgrid(self.x, self.z)
@@ -172,9 +171,7 @@ class SVGScenario:
         #numerical experiment: argument > SVG > default
         self._experiment = domain.get('experiment', {})
         self.source = {}
-        self._read_settings(regime, velocity, moving_boundary, quiescence_time, time_max,
-                            magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature,
-                            temperature_solver)
+        self._read_settings(settings)
 
         #layers
         self.asthenosphere_label = asthenosphere_label
@@ -182,11 +179,7 @@ class SVGScenario:
         self.min_thickness = min_thickness * 1.0e3 if(min_thickness is not None) else domain.get('min_thickness', MIN_THICKNESS)
         self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, domain_id=domain['id'],
                                       min_thickness=self.min_thickness, verbose=verbose)
-        if(self.layers[-1].rheology_name != 'air'):
-            raise SVGInputError(f"The top layer of {svg_file} must be the sticky air, with 'air' in the first line of its "
-                                f"description (found '{self.layers[-1].layer_label}' with {self.layers[-1].rheology_name}).")
-        if(len(layer_indices(self.layers, asthenosphere_label)) == 0):
-            raise SVGInputError(f"No shape labelled '{asthenosphere_label}' in {svg_file}.")
+        self._check_layers(self.layers, svg_file, asthenosphere_label)
 
         #Basalt layer with zero thickness just below the sticky air: it can not be drawn in the SVG and
         #receives the melt extracted by Mandyoc (magmatic_layer in param.txt)
@@ -228,10 +221,6 @@ class SVGScenario:
 
         self.T, self.VX, self.VZ = None, None, None
 
-    def _print(self, message):
-        if(self.verbose):
-            print(message)
-
     ###########################################################################
     # Settings
     ###########################################################################
@@ -247,67 +236,40 @@ class SVGScenario:
         self.source[name] = 'default'
         return default
 
-    def _on_off(self, name, value):
-        value = str(self._setting(name, value, 'off')).strip().lower()
-        if(value not in ['on', 'off']):
-            raise SVGInputError(f"{name} must be on or off (found '{value}').")
-        return value
-
-    def _read_settings(self, regime, velocity, moving_boundary, quiescence_time, time_max,
-                       magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature,
-                       temperature_solver):
+    def _read_settings(self, settings):
         where = f"Setting of {self.svg_file}"
-        read = lambda name, value, quantity, unit: parse_quantity(value, quantity, where, name, default_unit=unit)
+        def setting(name, default, quantity=None, unit=None, scale=1.0):
+            '''
+            Setting (argument > SVG > default). A text with a unit of tapioca.UNITS[quantity] (without unit: unit) is
+            converted to the base unit of the quantity and multiplied by scale (e.g. yr -> Myr).
+            '''
+            value = self._setting(name, settings.get(name), default)
+            if(quantity is not None and isinstance(value, str)):
+                value = parse_quantity(value, quantity, where, name, default_unit=unit) * scale
+            return value
 
-        self.regime = str(self._setting('regime', regime, 'rifting')).strip().lower()
-        if(self.regime not in REGIMES):
-            raise SVGInputError(f"Unknown regime '{self.regime}'. Use {', '.join(REGIMES)}.")
+        self.regime = self._check_choice('regime', setting('regime', 'rifting'), REGIMES)
+        self.velocity = self._check_number('velocity', setting('velocity', 1.0, 'velocity', 'cm/yr')) #cm/yr
+        self.moving_boundary = self._check_choice('moving_boundary', setting('moving_boundary', 'right'),
+                                                  ['left', 'right', 'symmetric'])
+        time_max = setting('time_max', None, 'time', 'Myr', 1.0e-6) #Myr
+        if(time_max is not None):
+            time_max = self._check_number('time_max', time_max, 0, strict=True)
+        self.quiescence_time = self._check_number('quiescence_time', setting('quiescence_time', 0.0, 'time', 'Myr', 1.0e-6), 0) #Myr
 
-        self.velocity = self._setting('velocity', velocity, 1.0) #cm/yr
-        if(isinstance(self.velocity, str)):
-            self.velocity = read('velocity', self.velocity, 'velocity', 'cm/yr')
+        self.magmatism = self._check_on_off('magmatism', setting('magmatism', 'off'))
+        self.magmatism_extraction = self._check_on_off('magmatism_extraction', setting('magmatism_extraction', 'off'))
+        self.magmatism_Ts0 = self._check_number('magmatism_Ts0', setting('magmatism_Ts0', 1080.0, 'temperature', 'oC')) #oC
+        self._check_experiment(self.regime, self.moving_boundary, self.source, self.magmatism, self.magmatism_extraction)
 
-        self.moving_boundary = str(self._setting('moving_boundary', moving_boundary, 'right')).strip().lower()
-        if(self.moving_boundary not in ['left', 'right', 'symmetric']):
-            raise SVGInputError(f"Unknown moving_boundary '{self.moving_boundary}'. Use left, right or symmetric.")
-        if(self.moving_boundary == 'symmetric' and self.regime == 'compression'):
-            raise SVGInputError("moving_boundary = symmetric is only available in the rifting and accordion regimes.")
-
-        time_max = self._setting('time_max', time_max, None) #Myr
-        if(isinstance(time_max, str)):
-            time_max = read('time_max', time_max, 'time', 'Myr') / 1.0e6
-
-        self.quiescence_time = self._setting('quiescence_time', quiescence_time, 0.0) #Myr
-        if(isinstance(self.quiescence_time, str)):
-            self.quiescence_time = read('quiescence_time', self.quiescence_time, 'time', 'Myr') / 1.0e6
-        if(self.quiescence_time < 0):
-            raise SVGInputError(f"quiescence_time must not be negative ({self.quiescence_time:g} Myr).")
-        if(self.regime in ['rifting', 'compression'] and self.source['quiescence_time'] != 'default'):
-            print(f"Warning: quiescence_time is not used in the {self.regime} regime.")
-
-        self.magmatism = self._on_off('magmatism', magmatism)
-        self.magmatism_extraction = self._on_off('magmatism_extraction', magmatism_extraction)
-        self.magmatism_Ts0 = self._setting('magmatism_Ts0', magmatism_Ts0, 1080.0) #oC
-        if(isinstance(self.magmatism_Ts0, str)):
-            self.magmatism_Ts0 = read('magmatism_Ts0', self.magmatism_Ts0, 'temperature', 'oC')
-        self.magmatism_Ts0 = float(self.magmatism_Ts0)
-        if(self.magmatism_extraction == 'on' and self.magmatism == 'off'):
-            print("Warning: magmatism_extraction is on but magmatism is off.")
-
-        preset = self._setting('preset_initial_temperature', preset_initial_temperature, None)
-        if(preset is not None):
-            preset = os.path.expanduser(str(preset).strip())
-            if(self.source['preset_initial_temperature'] == 'SVG' and not os.path.isabs(preset)):
-                preset = os.path.join(os.path.dirname(os.path.abspath(self.svg_file)), preset)
-            preset = os.path.normpath(preset)
-            if(not os.path.exists(preset)):
-                raise SVGInputError(f"preset_initial_temperature not found: {preset}")
+        preset = setting('preset_initial_temperature', None)
+        if(preset is not None): #a relative path in the SVG is relative to the folder of the SVG
+            base = os.path.dirname(os.path.abspath(self.svg_file)) if(self.source['preset_initial_temperature'] == 'SVG') else None
+            preset = self._check_path('preset_initial_temperature', preset, base)
         self.preset_initial_temperature = preset
 
-        solver = str(self._setting('temperature_solver', temperature_solver, '2D')).strip()
-        self.temperature_solver = {'2d': '2D', 'columns': 'columns', '1d': 'columns'}.get(solver.lower())
-        if(self.temperature_solver is None):
-            raise SVGInputError(f"Unknown temperature_solver '{solver}'. Use 2D or columns.")
+        self.temperature_solver = self._check_choice('temperature_solver', setting('temperature_solver', '2D'),
+                                                     ['2D', 'columns'], aliases={'1D': 'columns'})
 
         #Velocity and time:
         #   rifting: extension, the moving boundary moves outwards with velocity
@@ -326,7 +288,7 @@ class SVGScenario:
             if(time_max is not None): #time_max sets the duration of the second extension
                 self.dt_rifting2 = time_max - self.tf_quiescence
                 if(self.dt_rifting2 <= 0):
-                    raise SVGInputError(f"time_max = {time_max:g} Myr ends before the second extension starts ({self.tf_quiescence:g} Myr).")
+                    self._fail(f"time_max = {time_max:g} Myr ends before the second extension starts ({self.tf_quiescence:g} Myr).")
             self.time_max = (self.tf_quiescence + self.dt_rifting2) * 1.0e6
         elif(time_max is not None):
             self.time_max = time_max * 1.0e6
@@ -335,12 +297,12 @@ class SVGScenario:
         else: #rifting and compression
             self.time_max = 60.0e6
 
-        self._print(f"Numerical experiment: {self.regime} ({self.source['regime']}), velocity = {self.velocity:g} cm/yr "
+        self._print_verbose(f"Numerical experiment: {self.regime} ({self.source['regime']}), velocity = {self.velocity:g} cm/yr "
                     f"({self.source['velocity']}), moving boundary: {self.moving_boundary} ({self.source['moving_boundary']})")
-        self._print(f"Magmatism: {self.magmatism} ({self.source['magmatism']}), extraction: {self.magmatism_extraction} "
+        self._print_verbose(f"Magmatism: {self.magmatism} ({self.source['magmatism']}), extraction: {self.magmatism_extraction} "
                     f"({self.source['magmatism_extraction']}), Ts0 = {self.magmatism_Ts0:g} oC ({self.source['magmatism_Ts0']})")
         if(self.preset_initial_temperature is not None):
-            self._print(f"Initial temperature from the preliminary scenario {self.preset_initial_temperature} "
+            self._print_verbose(f"Initial temperature from the preliminary scenario {self.preset_initial_temperature} "
                         f"({self.source['preset_initial_temperature']})")
 
     ###########################################################################
@@ -429,8 +391,8 @@ class SVGScenario:
             tb.temperature.values = adapt_preset_temperature(depth, T_preset, sa_preset, litho_preset, -tb.z,
                                                              -tb.surface_interface.values, tb.lithosphere_thickness.values,
                                                              self.thickness_mantle)
-            self._print(f"Preset of initial temperature: {self.preset_source}")
-            self._print(f"\tsticky air of the preliminary scenario: {sa_preset/1.0e3:.0f} km; reference lithosphere: "
+            self._print_verbose(f"Preset of initial temperature: {self.preset_source}")
+            self._print_verbose(f"\tsticky air of the preliminary scenario: {sa_preset/1.0e3:.0f} km; reference lithosphere: "
                         f"{litho_preset/1.0e3:.0f} km (other lithosphere thicknesses are adapted)")
         self.builder.create_temperature_field(self.temperature_builder)
         self.T = self.builder.DTree.fields.temperature.values #(Nz, Nx)

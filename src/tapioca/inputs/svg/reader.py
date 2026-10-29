@@ -113,15 +113,13 @@ import svgelements as se
 from ..._variables import DEFAULT_MATERIAL, UNITS
 from ..._aux_functions import split_unit
 from ..generic_input_classes import MandyocBuilder
+from ..checks import SVGInputError
 from .materials import MandyocLayer, get_rheology
 
 __all__ = ["SVGInputError", "read_domain", "read_units", "layers_from_svg", "layers_to_builder", "write_interfaces",
            "layer_indices", "slot_thickness", "layer_thickness",
            "plot_layers", "points_from_spacing", "EXPERIMENT_KEYS", "SETUP_LABEL"]
 
-
-class SVGInputError(ValueError):
-    '''Error in the SVG file or in the settings of the scenario'''
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 INKSCAPE_LABEL = "{http://www.inkscape.org/namespaces/inkscape}label"
