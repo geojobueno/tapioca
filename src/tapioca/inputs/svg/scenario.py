@@ -49,8 +49,10 @@ from ..checks import SVGChecks
 from ._variables import (REGIMES, MANTLE_RHEOLOGIES, SYSTEMS, DEFAULT_PARAMS, ORGANIZE_SCRIPT, RUN_SCRIPT,
                          RUN_LAUNCHER, ZIP_SCRIPT)
 from .materials import MandyocLayer, BASALT
-from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, EXPERIMENT_KEYS, read_setup, layers_from_svg, layers_to_builder,
-                     points_from_spacing, parse_quantity, layer_indices, slot_thickness, layer_thickness)
+from ... import __version__
+from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, EXPERIMENT_KEYS, SVG_VERSION, INKSCAPE_VERSION,
+                     svg_versions, read_setup, layers_from_svg, layers_to_builder, points_from_spacing, parse_quantity,
+                     layer_indices, slot_thickness, layer_thickness)
 
 __all__ = ["SVGScenario", "REGIMES"]
 
@@ -164,6 +166,8 @@ class SVGScenario(SVGChecks, VerboseExtension):
         self.svg_file = self._check_file('SVG file', svg_file)
         self._check_keys('setting', settings, EXPERIMENT_KEYS)
         setup = self._check_setup(read_setup(svg_file), svg_file, SETUP_LABEL)
+        self.svg_version, self.inkscape_version = svg_versions(svg_file)
+        self._check_svg_versions(svg_file, self.svg_version, self.inkscape_version, SVG_VERSION, INKSCAPE_VERSION)
 
         #domain and resolution
         self.Lx, self.Lz = setup['Lx'], setup['Lz']
@@ -638,7 +642,11 @@ class SVGScenario(SVGChecks, VerboseExtension):
     def infos(self, name=''):
         '''Description of the scenario (list of lines).'''
         layers, ix = self.layers, self.idx_profile
-        lines = ['SCENARIO INFOS:', ' ', f'Name: {name}', ' ', 'Domain parameters:',
+        lines = ['SCENARIO INFOS:', ' ', f'Name: {name}',
+                 f"Built with tapioca {__version__} from {os.path.basename(self.svg_file)}: SVG {self.svg_version or '(not declared)'}, "
+                 f"saved by Inkscape {self.inkscape_version.split()[0] if self.inkscape_version else '(not declared)'} "
+                 f"(tested: SVG {SVG_VERSION}, Inkscape {INKSCAPE_VERSION})",
+                 ' ', 'Domain parameters:',
                  f"\tLx: {self.Lx*1.0e-3} km", f"\tLz: {self.Lz*1.0e-3} km", f"\tNx: {self.Nx}", f"\tNz: {self.Nz}",
                  f"Resolution dx x dz: {1.0e-3*self.dx} x {1.0e-3*self.dz} km2", ' ',
                  f'Time limit: {self.time_max/1.0e6} Myr']

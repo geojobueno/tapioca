@@ -97,6 +97,15 @@ class SVGChecks(InputChecks):
                        f"label it '{label}' and write Lx, Lz, dx and dz in its description.")
         return setup
 
+    def _check_svg_versions(self, svg_file: str, svg_version: str, inkscape_version: str,
+                            tested_svg: str, tested_inkscape: str) -> None:
+        '''Warn when the SVG declares another version of the format or was saved by another version of Inkscape.'''
+        if svg_version is not None and svg_version != tested_svg:
+            self._warn(f"{svg_file} declares SVG {svg_version}; tapioca reads SVG {tested_svg}. Check the layers.")
+        if inkscape_version is not None and not inkscape_version.startswith(tested_inkscape + "."):
+            self._warn(f"{svg_file} was saved by Inkscape {inkscape_version.split()[0]}; the SVG scenarios were tested "
+                       f"with Inkscape {tested_inkscape}. Check the layers (e.g. tapioca-svg-interfaces --plot).")
+
     def _check_layers(self, layers: list, svg_file: str, asthenosphere_label: str) -> None:
         '''Check the stack of layers (bottom to top): an asthenosphere and the sticky air at the top.'''
         if layers[-1].rheology_name != 'air':

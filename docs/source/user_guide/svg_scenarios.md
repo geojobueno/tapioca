@@ -14,9 +14,12 @@ from tapioca.inputs.svg import SVGScenario
 SVGScenario("scenario.svg").write_all("my_scenario")
 ```
 
-The SVG must be an SVG 1.1 file saved by Inkscape (tested with Inkscape 1.4): tapioca reads the object
+The SVG must be an SVG 1.1 file saved by Inkscape (tested with Inkscape 1.4.4): tapioca reads the object
 properties of Inkscape (label, title and description) and the shapes with `svgelements`, so curves,
-transforms and groups may be used.
+transforms and groups may be used. A file that declares another SVG version, or that was saved by another
+version of Inkscape, is read with a warning: check the layers (e.g. with `tapioca-svg-interfaces --plot`), since
+a new version could change how the drawing is stored. The versions of the file are recorded in
+`infos_<folder>.txt`.
 
 The output folder receives `interfaces.txt`, `param.txt`, `input_temperature_0.txt`,
 `input_velocity_0.txt`, `vel_bc.txt`, `velz_bc.txt`, `scale_bcv.txt` (accordion), `infos_<folder>.txt`,

@@ -15,6 +15,8 @@ tapioca-svg scenario.svg -o my_scenario
 ```
 
 See [examples/svg_scenarios](examples/svg_scenarios/README.md) and the user guide (*Scenarios from SVG files*).
+The SVG files must be SVG 1.1 saved by Inkscape 1.4 (tested with Inkscape 1.4.4); other versions are read with a
+warning, since a new version could change how the drawing is stored.
 
 Future implementations of tapIOca are planned to include:
 - A basic usage guide;

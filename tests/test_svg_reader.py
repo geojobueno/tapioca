@@ -5,7 +5,7 @@ import re
 import numpy as np
 import pytest
 
-from tapioca.inputs.svg import SVGInputError, SVGScenario, layers_from_svg, layers_to_builder, read_setup, read_units, write_interfaces
+from tapioca.inputs.svg import INKSCAPE_VERSION, SVG_VERSION, SVGInputError, SVGScenario, svg_versions, layers_from_svg, layers_to_builder, read_setup, read_units, write_interfaces
 from tapioca.inputs.svg.reader import eval_number, parse_description
 
 from conftest import SVG_SCENARIOS, quiet, svg_path
@@ -132,3 +132,22 @@ def test_only_the_setup_label_is_read(tmp_path):
     assert read_setup(str(svg)) is None
     with pytest.raises(SVGInputError, match="No shape labelled 'setup'"):
         SVGScenario(str(svg))
+
+
+@pytest.mark.parametrize("name", SVG_SCENARIOS)
+def test_examples_are_svg_1_1(name):
+    svg_version, inkscape_version = svg_versions(str(svg_path(name)))
+    assert svg_version == SVG_VERSION
+    assert inkscape_version is None or inkscape_version.startswith(INKSCAPE_VERSION + ".")
+
+
+@pytest.mark.parametrize("old, new, warning", [
+    ('version="1.1"', 'version="2.0"', "declares SVG 2.0"),
+    ('<svg', '<svg inkscape:version="1.5.0 (abc, 2027-01-01)"', "saved by Inkscape 1.5.0"),
+])
+def test_other_versions_are_warned(tmp_path, capsys, old, new, warning):
+    svg = tmp_path / "other.svg"
+    svg.write_text(svg_path("rifting").read_text().replace(old, new, 1))
+    scenario = SVGScenario(str(svg), dx=10, dz=10, verbose=False)
+    assert warning in capsys.readouterr().out
+    assert any("tested: SVG 1.1, Inkscape 1.4" in line for line in scenario.infos())

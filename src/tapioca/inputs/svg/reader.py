@@ -1,9 +1,11 @@
 '''
 Build a Mandyoc interfaces.txt from an SVG drawing (e.g. made in Inkscape).
 
-Format: SVG 1.1 files saved by Inkscape (tested with Inkscape 1.4). The labels, titles and descriptions of
-the shapes are the Inkscape object properties (inkscape:label, <title> and <desc>), and the shapes are read
-with svgelements, so curves, transforms and groups are supported.
+Format: SVG 1.1 files saved by Inkscape (tested with Inkscape 1.4, see SVG_VERSION and INKSCAPE_VERSION). The
+labels, titles and descriptions of the shapes are the Inkscape object properties (inkscape:label, <title> and
+<desc>), and the shapes are read with svgelements, so curves, transforms and groups are supported. SVGScenario
+and tapioca-svg-interfaces warn when a file declares another SVG version or was saved by another version of
+Inkscape (svg_versions), since a change in the format could change how the drawing is read.
 
 Each filled shape is a body of rock described by its object properties
 (Inkscape: Object > Object Properties):
@@ -116,17 +118,20 @@ import svgelements as se
 from ..._variables import DEFAULT_MATERIAL, UNITS
 from ..._aux_functions import split_unit
 from ..generic_input_classes import MandyocBuilder
-from ..checks import SVGInputError
+from ..checks import SVGInputError, SVGChecks
 from .materials import MandyocLayer, get_rheology
 
-__all__ = ["SVGInputError", "read_setup", "read_units", "layers_from_svg", "layers_to_builder", "write_interfaces",
+__all__ = ["SVGInputError", "SVG_VERSION", "INKSCAPE_VERSION", "svg_versions", "read_setup", "read_units", "layers_from_svg", "layers_to_builder", "write_interfaces",
            "layer_indices", "slot_thickness", "layer_thickness",
            "plot_layers", "points_from_spacing", "EXPERIMENT_KEYS", "SETUP_LABEL"]
 
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
-INKSCAPE_LABEL = "{http://www.inkscape.org/namespaces/inkscape}label"
+INKSCAPE_NS = "{http://www.inkscape.org/namespaces/inkscape}"
+INKSCAPE_LABEL = INKSCAPE_NS + "label"
 SHAPE_TAGS = {"rect", "path", "circle", "ellipse", "polygon", "polyline"}
+SVG_VERSION = "1.1"  # version of the SVG format read by tapioca
+INKSCAPE_VERSION = "1.4"  # version of Inkscape (major.minor) used to draw and test the SVG scenarios
 SETUP_LABEL = "setup"  # label (or id) of the shape that gives the model domain, the resolution and the experiment
 MIN_THICKNESS = 1.0e3  # default min_thickness [m]: thinner pieces of units drawn thicker elsewhere are removed (see remove_slivers)
 EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiescence_time",
@@ -209,6 +214,15 @@ def is_setup_shape(el, label=SETUP_LABEL):
             and label in (el.get(INKSCAPE_LABEL), el.get("id")))
 
 ## all this things could be used to create the MandyocBuilder (next implementation: create the abstract class `GeometricDomain`) 
+def svg_versions(svg_file):
+    '''
+    Version of the SVG format (attribute version of <svg>) and version of Inkscape that saved the file
+    (inkscape:version, e.g. "1.4.4 (dcaf3e7, 2026-05-05)"), or None when the file does not declare them.
+    '''
+    root = ET.parse(svg_file).getroot()
+    return root.get("version"), root.get(INKSCAPE_NS + "version")
+
+
 def read_setup(svg_file):
     '''
     Read the shape labelled "setup" (see the module docstring).
@@ -923,6 +937,7 @@ def _main():
     parser.add_argument("--plot", help="save a figure of the resulting layers (e.g. numerical_setup.png)")
     args = parser.parse_args()
 
+    SVGChecks()._check_svg_versions(args.svg, *svg_versions(args.svg), SVG_VERSION, INKSCAPE_VERSION)
     setup = read_setup(args.svg) or {}
     Lx = args.Lx * 1.0e3 if args.Lx else setup.get("Lx")
     Lz = args.Lz * 1.0e3 if args.Lz else setup.get("Lz")
