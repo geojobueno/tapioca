@@ -60,7 +60,7 @@ It may also give the settings of the numerical experiment, which are returned
 as text in setup["experiment"] and read by the
 scenario builder (tapioca.inputs.svg.SVGScenario): regime (rifting, compression, accordion, quiescence), velocity
 (e.g. 1 cm/yr), moving_boundary (left, right or symmetric), time_max (e.g. 100 Myr),
-quiescence_time (e.g. 300 Myr), magmatism (on or off), magmatism_extraction (on or off)
+quiescence_time (e.g. 0 Myr), magmatism (on or off), magmatism_extraction (on or off)
 magmatism_Ts0 (e.g. 1080, in oC) and preset_initial_temperature (folder or .nc file of a
 preliminary scenario whose final thermal state is used as initial temperature).
 

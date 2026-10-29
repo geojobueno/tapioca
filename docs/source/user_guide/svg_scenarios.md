@@ -105,7 +105,7 @@ dz = 2 km
 regime = accordion
 velocity = 1 cm/yr
 moving_boundary = right
-quiescence_time = 300 Myr
+quiescence_time = 0 Myr
 time_max = 500 Myr
 magmatism = off
 magmatism_extraction = off
@@ -117,7 +117,7 @@ temperature_solver = 2D
 Only the shape labelled `setup` is read (older SVGs with a shape labelled `domain` must be renamed).
 
 Every setting can also be given to `SVGScenario` (as a keyword argument, with or without units, e.g.
-`SVGScenario("scenario.svg", quiescence_time="300 Myr")`) or on the command line (e.g. `--regime`, `--dx`),
+`SVGScenario("scenario.svg", quiescence_time="0 Myr")`) or on the command line (e.g. `--regime`, `--dx`),
 which overrides the SVG. The units are those of `tapioca.UNITS` (km or m; Myr, kyr or yr; cm/yr or mm/yr; oC).
 Unknown settings and invalid values are errors (`SVGInputError`). Defaults:
 
@@ -163,7 +163,7 @@ the ID of the layer, from the bottom) in `water_layer` and `magmatic_layer`.
 ## Initial temperature
 
 Without `preset_initial_temperature`, the initial temperature is the steady-state conduction in the lithosphere
-(`TemperatureFieldBuilder`): from 0 °C at the surface to the mantle potential temperature (1400 °C) at the top of
+(`TemperatureFieldBuilder`): from 0 °C at the surface to the mantle potential temperature (1350 °C) at the top of
 the asthenosphere (LAB), with the conductivity and the radiogenic heat of each unit, and the mantle adiabat below
 the LAB. With `temperature_solver = 2D` (default) the whole lithosphere is solved at once (`solve_heat_2D`), so heat
 also flows sideways where the lithosphere changes along x (e.g. at the edge of a craton); with

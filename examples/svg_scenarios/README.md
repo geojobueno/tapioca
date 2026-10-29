@@ -22,7 +22,7 @@ cd rifting
 tapioca-svg rifting.svg -o inputs
 ```
 
-The settings of the SVG can be changed on the command line, e.g. `tapioca-svg accordion.svg --quiescence-time 300 --dx 1 --dz 1`.
+The settings of the SVG can be changed on the command line, e.g. `tapioca-svg accordion.svg --quiescence-time 0 --dx 1 --dz 1`.
 
 In rifting and accordion, `moving_boundary = symmetric` (in the SVG, as in `rifting_symmetric`, or `--moving-boundary symmetric`)
 puts the reference frame at the centre of the domain: both boundaries move outwards with half of the velocity,

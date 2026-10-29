@@ -12,7 +12,7 @@ experiment:
     regime = accordion                         (rifting, compression, accordion, quiescence)
     velocity = 1 cm/yr
     moving_boundary = right                    (left, right or symmetric)
-    quiescence_time = 300 Myr
+    quiescence_time = 0 Myr
     time_max = 500 Myr
     magmatism = off
     magmatism_extraction = off
@@ -27,7 +27,7 @@ which overrides the SVG; without it, the default is used.
 Example
 -------
     from tapioca.inputs.svg import SVGScenario
-    scenario = SVGScenario("rifting.svg", regime="accordion", quiescence_time=300)
+    scenario = SVGScenario("rifting.svg", regime="accordion", quiescence_time=0)
     scenario.write_all("my_scenario")
 
 The scenario is built on the generic builders of tapioca: scenario.builder is a MandyocBuilder with the
@@ -141,7 +141,7 @@ class SVGScenario(SVGChecks, VerboseExtension):
     '''
 
     #Initial temperature (the thermal diffusivity k of each layer comes from its description or rheology)
-    TP = 1400.0 #mantle potential temperature [oC]
+    TP = 1350.0 #mantle potential temperature [oC], at the LAB
     ccapacity = 1250.0 #heat capacity [J/kg/K]
 
     #Accordion regime [Myr]

@@ -1,38 +1,148 @@
-# SVG Scenarios
+# SVG Scenarios Architecture
 
-How `tapioca.inputs.svg` turns a drawing into the input files of Mandyoc. The reader
-(`inputs/svg/reader.py`) builds the stack of layers from the SVG; `SVGScenario` (`inputs/svg/scenario.py`)
-gives them to the generic builders (`inputs/generic_input_classes.py`), which build the fields and export the
-files.
+`tapioca.inputs.svg` turns a scenario drawn in an SVG file (SVG 1.1, saved by Inkscape) into the input files of
+Mandyoc. It reads the drawing and the settings, and leaves the physics to the generic builders of
+`tapioca.inputs`: the SVG code builds the stack of layers, and `MandyocBuilder`, `TemperatureFieldBuilder` and
+`VelocityFieldBuilder` build the fields and export the files.
 
-## Overview
+## 1. Class Architecture
+
+`SVGScenario` extends the mixins of the generic inputs (`SVGChecks` for the checks of the parameters,
+`VerboseExtension` for the prints) and composes the generic builders. The reader is a module of functions that
+returns the stack of layers (`MandyocLayer`), whose materials come from `LithologicalUnit`.
+
+```mermaid
+classDiagram
+    %% Mixins of tapioca.inputs
+    class VerboseExtension {
+        <<Mixin>>
+        +bool verbose
+        +_print_verbose(message)
+    }
+    class InputChecks {
+        <<Mixin>>
+        +error = InputError
+        +_check_choice()
+        +_check_on_off()
+        +_check_number()
+        +_check_path()
+        +_check_keys()
+        +_check_domain()
+    }
+    class SVGChecks {
+        +error = SVGInputError
+        +_check_setup()
+        +_check_layers()
+        +_check_experiment()
+    }
+    InputChecks <|-- SVGChecks
+
+    %% SVG scenario
+    class SVGScenario {
+        +list layers
+        +MandyocBuilder builder
+        +TemperatureFieldBuilder temperature_builder
+        +VelocityFieldBuilder velocity_builder
+        +build_temperature()
+        +build_velocity()
+        +parameters()
+        +write_all()
+        +plot_setup()
+    }
+    SVGChecks <|-- SVGScenario
+    VerboseExtension <|-- SVGScenario
+
+    %% Reader (module of functions)
+    class reader {
+        <<module>>
+        +read_setup(svg)
+        +read_units(svg)
+        +layers_from_svg(svg, Lx, Lz, Nx)
+        +layers_to_builder(layers, Lx, Lz, Nz)
+        +write_interfaces(layers, Lx, Lz, fname)
+    }
+    class MandyocLayer {
+        +str layer_label
+        +LithologicalUnit rheology
+        +ndarray interface
+        +material() dict
+    }
+    class LithologicalUnit {
+        +str name
+        +dict params
+    }
+    reader ..> MandyocLayer : creates
+    MandyocLayer --> LithologicalUnit
+    SVGScenario ..> reader : uses
+
+    %% Generic builders
+    class MandyocBuilder {
+        +DataTree DTree
+        +create_interface()
+        +create_materials_fields()
+        +set_params()
+        +export_interfaces()
+        +export_field()
+    }
+    class TemperatureFieldBuilder {
+        +DataArray temperature
+        +apply_linear_temperature()
+        +solve_heat_1D()
+        +solve_heat_2D()
+    }
+    class VelocityFieldBuilder {
+        +DataTree velocs
+        +set_tectonic_regime()
+        +conservate_veloc()
+    }
+    SVGScenario *-- MandyocBuilder
+    SVGScenario *-- TemperatureFieldBuilder
+    SVGScenario *-- VelocityFieldBuilder
+    TemperatureFieldBuilder --> MandyocBuilder : fields
+    VelocityFieldBuilder --> MandyocBuilder : fields
+```
+
+### Class Responsibilities
+
+*   **`SVGChecks` (extends `InputChecks`, `inputs/checks.py`):** checks the settings and the drawing (setup shape,
+    stack of layers, combinations of settings) and raises `SVGInputError` with a message that names the parameter.
+*   **`SVGScenario` (`inputs/svg/scenario.py`):** reads the settings (argument > SVG > default), chooses the water and
+    magmatic layers, and drives the generic builders: the temperature (`solve_heat_2D` by default, or `solve_heat_1D`),
+    the velocity of the tectonic regime (`set_tectonic_regime`) and the files (`write_all`).
+*   **`reader` (`inputs/svg/reader.py`):** turns the shapes into a single stack of layers, bottom to top, with the
+    depth of the base of each layer in every column, and converts it into the interfaces of a `MandyocBuilder`.
+*   **`MandyocLayer` / `LithologicalUnit` (`inputs/svg/materials.py`):** a layer of the stack and its material (the 13
+    parameters of `DEFAULT_MATERIAL`, from `DEFAULT_MATERIALS` and the description of the shape).
+*   **`MandyocBuilder`, `TemperatureFieldBuilder`, `VelocityFieldBuilder` (`inputs/generic_input_classes.py`):** the
+    generic builders, which own the `DataTree` with the interfaces and the fields and export the input files.
+
+---
+
+## 2. From the Drawing to the Input Files
 
 ```mermaid
 flowchart TD
     SVG["scenario.svg<br/>(SVG 1.1, Inkscape)"]
 
-    subgraph reader["reader.py: layers_from_svg"]
+    subgraph reader["reader.layers_from_svg"]
         SETUP["read_setup<br/>shape labelled setup:<br/>Lx, Lz, dx, dz, settings"]
         UNITS["read_units<br/>label, title, description<br/>of each shape"]
         RASTER["rasterize<br/>unit of each sample point"]
-        GAPS["fill_gaps<br/>remove_slivers"]
+        GAPS["fill_gaps, remove_slivers"]
         STACK["build_stack<br/>one stack for all columns"]
         SCALE["rescale_thickness<br/>h of each unit"]
-        LAYERS["list of MandyocLayer<br/>(bottom to top, depth of the base)"]
+        LAYERS["MandyocLayer list<br/>(bottom to top, depth of the base)"]
     end
 
-    subgraph scenario["scenario.py: SVGScenario"]
-        CHECKS["SVGChecks<br/>settings and layers"]
+    subgraph scenario["SVGScenario"]
+        CHECKS["SVGChecks"]
         EXTRA["water_layer, magmatic_layer<br/>(basalt of zero thickness)"]
         TOB["layers_to_builder"]
     end
 
-    subgraph generic["generic_input_classes.py"]
-        MB["MandyocBuilder<br/>DTree: interfaces and fields"]
-        TB["TemperatureFieldBuilder<br/>solve_heat_2D or solve_heat_1D"]
-        VB["VelocityFieldBuilder<br/>set_tectonic_regime"]
-    end
-
+    MB["MandyocBuilder<br/>/interfaces, /fields"]
+    TB["TemperatureFieldBuilder"]
+    VB["VelocityFieldBuilder"]
     FILES["interfaces.txt, param.txt,<br/>input_temperature_0.txt, input_velocity_0.txt,<br/>vel_bc.txt, velz_bc.txt, scale_bcv.txt"]
 
     SVG --> SETUP --> CHECKS
@@ -43,67 +153,40 @@ flowchart TD
     MB --> FILES
 ```
 
-## From shapes to sample points
+### Steps
 
-`read_units` reads the object properties of each shape (Inkscape: *Object > Object Properties*). The first
-line of the description is the rheology and the next lines are `key = value` (`C`, `rho` and `H` are
-required; `h` is the reference thickness). Shapes with the same label are one unit; a shape without
-description takes the one of the group (e.g. the Inkscape layer) that contains it.
+*   **Shapes to sample points:** `read_units` reads the object properties of each shape (Inkscape: *Object > Object
+    Properties*): the first line of the description is the rheology, the next lines are `key = value` (`C`, `rho`
+    and `H` are required; `h` is the reference thickness). `rasterize` maps the bounding box of the setup shape to the
+    domain and samples the drawing (`Nx` columns, rows of 100 m), painting the shapes in document order as Inkscape
+    does; it also keeps the unit painted over (`under`), the host of seeds and basins. `fill_gaps` fills the points
+    not covered by any shape and `remove_slivers` removes thin layers left by shapes that overlap a little.
+*   **Columns to one stack:** each interface of Mandyoc is a single line `z(x)`, so one stack must fit every column.
+    `build_stack` joins the sequences of units of the columns with the shortest common supersequence (`scs`), e.g.
+    `[asthenosphere, mantle, crust, air]` and `[asthenosphere, mantle, crust, seed, crust, air]` give the second one,
+    with zero thickness for the seed and the upper crust slot where they are absent. Away from a body, its
+    interfaces stay flat, so Mandyoc draws a box and not a funnel.
+*   **Thickness `h`:** `rescale_thickness` makes the drawing independent of the vertical scale: a unit with `h` is
+    stretched by `h / (its most common drawn thickness)`, bodies without `h` follow their host, and bodies with `h`
+    get that thickness while their host absorbs the difference. The bottom unit fills the rest of the domain.
+*   **Stack to builders:** `layers_to_builder` creates the interfaces of `MandyocBuilder` (see below) and
+    `create_materials_fields` fills the material fields; the temperature and velocity builders add their fields.
 
-`rasterize` maps the bounding box of the setup shape to the domain and samples the drawing on a grid of
-`Nx` columns and rows of `sampling` (100 m by default). The shapes are painted in document order, as
-Inkscape draws them, so each point gets the unit of the last shape that contains it. It also keeps the unit
-painted over (`under`), which is the host of seeds and basins.
+---
 
-```mermaid
-flowchart LR
-    A["SVG coordinates<br/>(x right, y down)"] -->|"setup bbox -> domain"| B["sample grid<br/>row 0 = top, depth positive down"]
-    B -->|"document order"| C["grid: unit of each point<br/>under: unit painted over"]
-```
+## 3. Conventions
 
-`fill_gaps` gives the points not covered by any shape the unit of the nearest covered point (first along the
-row, then along the column). `remove_slivers` removes the thin layers left by shapes that overlap a little
-(thinner than `min_thickness` in every column, when the unit is thicker elsewhere).
-
-## From columns to one stack of layers
-
-Each interface of Mandyoc is a single line `z(x)`, so the same stack of layers must fit every column.
-`build_stack` reads the units of each column from the bottom to the top and joins all the different sequences
-with the shortest common supersequence (`scs`). A unit absent in a column gets zero thickness there:
-
-```mermaid
-flowchart LR
-    C1["column far from the seed<br/>asthenosphere, mantle, crust, air"] --> S["stack (scs)<br/>asthenosphere, mantle, crust, seed, crust, air"]
-    C2["column through the seed<br/>asthenosphere, mantle, crust, seed, crust, air"] --> S
-```
-
-Away from a body (seed, basin), its interfaces stay flat at the depth of the body, so that Mandyoc, which
-interpolates the interfaces between the columns, draws a box and not a funnel.
-
-`rescale_thickness` makes the drawing independent of the vertical scale: a unit with `h` is stretched by
-`h / (its most common drawn thickness)`, so thinned regions keep their drawn proportion; bodies without `h`
-follow the unit they are drawn over; bodies with `h` get that thickness and their host absorbs the difference.
-The bottom unit (asthenosphere) fills the rest of the domain and can not have `h`.
-
-## From the stack to the builders
-
-The reader works with depths positive downwards (as the SVG); `layers_to_builder` converts them to the
-convention of Mandyoc and of `MandyocBuilder`: z positive upwards, from `-Lz` at the base to `0` at the top,
-and node `(0, 0)` at the bottom-left corner of the domain.
+The reader works with depths positive downwards, as the SVG; the generic builders use the convention of Mandyoc:
+z positive upwards, from `-Lz` at the base to `0` at the top, and node `(0, 0)` at the bottom-left corner.
 
 ```mermaid
 flowchart LR
     L["layers[i].interface<br/>depth of the base of layer i (m, down)"] -->|"z = -depth"| I["interface ID i = top of layer i<br/>z = -layers[i+1].interface<br/>ID -1: sticky air"]
-    I --> F["create_materials_fields<br/>rho, C, H, A, n, Q, V, k, ... (Nz, Nx)"]
+    I --> F["/fields: rho, C, H, A, n, Q, V, k, ...<br/>(z, x), row 0 at the base"]
 ```
 
-`SVGScenario` then uses the generic builders:
-
-- **Temperature**: `TemperatureFieldBuilder` with the LAB (top of the asthenosphere) and the surface (top of the
-  solid layers: below the sticky air, or below the water) given by their interface IDs;
-  `apply_linear_temperature` and `solve_heat_2D` (default) or `solve_heat_1D`.
-- **Velocity**: `VelocityFieldBuilder.set_tectonic_regime` with the regime (extension for rifting and accordion,
-  compression), the moving boundary and the thickness with constant velocity; `conservate_veloc` removes the
-  divergence at the top.
-- **Files**: `MandyocBuilder` exports `interfaces.txt` (13 parameters per layer), `param.txt` (`set_params` with
-  `SVGScenario.parameters`) and the temperature and velocity fields.
+*   **Interfaces:** ID `i` is the top of layer `i` and carries its material; ID `-1` is the sticky air.
+*   **Surface and LAB:** the surface is the top of the solid layers (the base of the sticky air, or of the water
+    when `water_layer` is given); the LAB is the top of the asthenosphere. Both are passed by ID to
+    `TemperatureFieldBuilder` and to `set_tectonic_regime`.
+*   **Water and magmatic layers:** chosen by the user (label or ID), never guessed from their position.

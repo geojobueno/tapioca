@@ -2,7 +2,7 @@
 Command line interface of the scenario builder:
 
     tapioca-svg scenario.svg [-o output_dir] [--dx 1] [--dz 1] [--regime rifting] [--velocity 1]
-                [--moving-boundary right] [--quiescence-time 300] [--time-max 500]
+                [--moving-boundary right] [--quiescence-time 0] [--time-max 500]
                 [--magmatism off] [--magmatism-extraction off] [--magmatism-Ts0 1080]
                 [--preset-initial-temperature path/to/preliminary] [--min-thickness 1] [--no-plots]
                 [--system linux] [--ncores 20] [--mandyoc-options="-seed 0,5,8 -strain_seed 0.0,1.0,1.0"] [--no-scripts]
@@ -39,7 +39,7 @@ def main(argv=None):
     parser.add_argument('--magmatism-extraction', choices=['on', 'off'],
                         help='extraction of the melt to a basalt layer below the sticky air (default: from the SVG, or off)')
     parser.add_argument('--magmatism-Ts0', type=float, help='magmatism_Ts0 in param.txt [oC] (default: from the SVG, or 1080)')
-    parser.add_argument('--preset-initial-temperature', help='folder (or _output_temperature.nc) of a preliminary scenario: the '
+    parser.add_argument('--preset-initial-temperature', help='folder (with temperature.nc) or NetCDF file of a preliminary scenario: the '
                                                              'horizontal mean of its final temperature, adapted to the lithosphere '
                                                              'of the SVG, is the initial temperature (default: from the SVG, or none)')
     parser.add_argument('--water-layer', help='label (or ID) of the unit drawn as water, below the sticky air (default: from the SVG, or none)')

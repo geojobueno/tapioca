@@ -45,8 +45,6 @@ VARS_TYPES:dict = { # Outputs
 }
 """dict: Dictionary with datatypes (value) for each variable (key)."""
 
-## BUG (Claude): Mandyoc uses a year of 365 days (seg_per_ano = 365.0*24.0*3600.0 in src/header.h), so the
-## velocities converted with this value (e.g. VelocityFieldBuilder with units='cm/y') are 6.8e-4 smaller in Mandyoc.
 SEC_PER_YEAR:float = 60*60*24*365.25 # seconds per year
 """float: Conversion factor of seconds in a year."""
 

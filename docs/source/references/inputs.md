@@ -37,7 +37,7 @@ Example:
 ```python
 from tapioca.inputs.svg import SVGScenario
 
-scenario = SVGScenario("rifting.svg", regime="accordion", quiescence_time=300)
+scenario = SVGScenario("rifting.svg", regime="accordion", quiescence_time=0)
 scenario.write_all("my_scenario", particles_per_element=100)  # keyword arguments change param.txt
 ```
 
@@ -59,7 +59,7 @@ scenario.write_all("my_scenario")
 
 The same from the command line (installed with the package):
 ```bash
-tapioca-svg rifting.svg -o my_scenario --regime accordion --quiescence-time 300
+tapioca-svg rifting.svg -o my_scenario --regime accordion --quiescence-time 0
 ```
 
 The run script of Mandyoc is written for the system that runs tapioca (`run_linux.sh` or `run_mac.sh`).
