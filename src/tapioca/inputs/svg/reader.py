@@ -790,10 +790,8 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, setup_id=None, min_thickness
     unit_layers = []
     for i, name in enumerate(unit_names):
         u = units[name]
-        layer = MandyocLayer(name, u["rheology"], Nx=Nx, **u["props"])
-        layer.title = u["title"] or name
-        layer.color = colors.get(i, "#808080")
-        layer.reference_thickness = u["thickness"]
+        layer = MandyocLayer(name, u["rheology"], Nx=Nx, title=u["title"], color=colors.get(i, "#808080"),
+                             reference_thickness=u["thickness"], **u["props"])
         unit_layers.append(layer)
 
     layers = []

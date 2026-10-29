@@ -50,3 +50,10 @@ def test_mandyoc_layer_material_overrides_the_rheology():
 def test_mandyoc_layer_rejects_unknown_parameters():
     with pytest.raises(ValueError, match="Unknown parameter"):
         MandyocLayer("crust", "wet quartz", Nx=5, density=2750.0)  # descriptions accept the long names, layers do not
+
+
+def test_mandyoc_layer_drawing_attributes():
+    layer = MandyocLayer("crust", "wet quartz", Nx=5, title="Upper crust", color="#e49c7c", reference_thickness=25e3,
+                         rho=2700.0)
+    assert (layer.title, layer.color, layer.reference_thickness) == ("Upper crust", "#e49c7c", 25e3)
+    assert MandyocLayer("crust", "wet quartz", Nx=5, rho=2700.0).title == "crust"  # default: the label

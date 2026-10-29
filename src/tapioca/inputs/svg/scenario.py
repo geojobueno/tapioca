@@ -265,11 +265,10 @@ class SVGScenario(SVGChecks, VerboseExtension):
 
     def _insert_basalt(self, index):
         '''Insert a basalt layer of zero thickness at index of the stack (below the layer at index); return its index.'''
-        basalt = MandyocLayer('basalt', BASALT, Nx=self.Nx, rho=2900.0, C=1.0, H=9.0e-11)
+        basalt = MandyocLayer('basalt', BASALT, Nx=self.Nx, title='Basalt', color='xkcd:dark grey blue',
+                              rho=2900.0, C=1.0, H=9.0e-11)
         basalt.interface = np.copy(self.layers[index].interface) #base of basalt = base of the layer above it
         basalt.base_depth = basalt.interface.max()
-        basalt.title = 'Basalt'
-        basalt.color = 'xkcd:dark grey blue'
         self.layers.insert(index, basalt)
         return index
 

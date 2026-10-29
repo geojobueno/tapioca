@@ -14,9 +14,11 @@ from ..._variables import DEFAULT_MATERIAL, DEFAULT_MATERIALS
 
 ## I think the MandyocLayer could be only a interface (xr.DataArray) in the MandyocBuilder.DTree.interfaces (xr.Dataset)
 class MandyocLayer:
-    def __init__(self, layer_label, rheology, Nx, base_depth=0.0, **params):
+    def __init__(self, layer_label, rheology, Nx, base_depth=0.0, title=None, color="#808080",
+                 reference_thickness=None, **params):
         """
-        A layer of the stack of an SVG scenario: its material and its interface (depth of its base along x).
+        A layer of the stack of an SVG scenario: its material (params), its interface (depth of its base along
+        x) and the attributes of the drawing (title, color, reference thickness h).
 
         Parameters
         ----------
@@ -28,6 +30,12 @@ class MandyocLayer:
             Number of points in x direction
         base_depth: float
             Depth of the layer base [m] (the interface is flat until it is set)
+        title: str, optional
+            Name of the layer in the legend of the figures (Title of the shape in the SVG). Default: layer_label.
+        color: str, optional
+            Color of the layer in the figures (fill of the shape in the SVG). Default: grey.
+        reference_thickness: float, optional
+            Reference thickness h of the unit [m], given in the SVG description (None if not given).
         params: keyword arguments
             Parameters of the layer with the keys of tapioca.DEFAULT_MATERIAL (rho, C, H, A, n, Q, V, k,
             weakening_seed, cohesion_min, ...); they replace the ones of the rheology.
@@ -49,6 +57,9 @@ class MandyocLayer:
         self.params = {**self.rheology.params, **params}
         self.base_depth = base_depth
         self.Nx = Nx
+        self.title = title if title is not None else layer_label
+        self.color = color
+        self.reference_thickness = reference_thickness
         self.interface = np.ones(Nx)*base_depth
 
     def material(self):
