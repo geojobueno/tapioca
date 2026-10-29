@@ -128,7 +128,8 @@ SETUP_LABEL = "setup"  # label (or id) of the shape that gives the model domain,
 LEGACY_SETUP_LABEL = "domain"  # label of the setup shape in older SVGs, still read with a warning
 MIN_THICKNESS = 1.0e3  # default min_thickness [m]: thinner pieces of units drawn thicker elsewhere are removed (see remove_slivers)
 EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiescence_time",
-                   "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature")  # settings of the experiment in the domain description
+                   "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature",
+                   "temperature_solver")  # settings of the experiment in the domain description
 
 ## There is this same variable in aux_variables, with more properties.
 # key in the description -> attribute of MandyocLayer

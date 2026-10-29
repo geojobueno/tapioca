@@ -18,6 +18,7 @@ experiment:
     magmatism_extraction = off
     magmatism_Ts0 = 1080
     preset_initial_temperature = ../preliminary
+    temperature_solver = 2D                    (2D or columns)
     min_thickness = 1 km
 
 Each setting may also be given to SVGScenario (or on the command line, tapioca-svg),
@@ -398,6 +399,10 @@ class SVGScenario:
         Folder (or _output_temperature.nc) of a preliminary scenario: the horizontal mean of its final
         temperature, adapted to the lithosphere of the SVG, is the initial temperature. A relative path in the
         SVG is relative to the folder of the SVG. Default: none (conductive model).
+    temperature_solver : str, optional
+        Steady-state conduction in the lithosphere of the conductive model: '2D' (the whole lithosphere at once,
+        so heat also flows sideways where the layers change along x) or 'columns' (each column alone).
+        Default: 2D.
     asthenosphere_label, seed_label : str
         Labels of the asthenosphere and of the weak seed in the SVG.
     sampling : float
@@ -421,14 +426,9 @@ class SVGScenario:
               after build_temperature() and build_velocity()
     '''
 
-    ## kappa is a material property now, not a constant for the whole scenario
-    #Conductive model of the initial temperature
+    #Initial temperature (the thermal diffusivity k of each layer comes from its description or rheology)
     TP = 1400.0 #mantle potential temperature [oC]
-    DeltaT = 0.0 #increase in the mantle temperature [oC]
     ccapacity = 1250.0 #heat capacity [J/kg/K]
-    kappa = 1.0e-6 #thermal diffusivity [m2/s]
-    conductive_time = 2000.0e6 #duration of the conductive model [yr]
-    conductive_dt = 5000 #time step of the conductive model [yr]
 
     #Accordion regime [Myr]
     ti_convergence = 25.0
@@ -447,7 +447,7 @@ class SVGScenario:
     ## many of this parameters could be kwargs, such as "magmatism_extraction", "quiescence_time", "magmatism_Ts0"
     def __init__(self, svg_file, dx=None, dz=None, regime=None, velocity=None, moving_boundary=None,
                  quiescence_time=None, time_max=None, magmatism=None, magmatism_extraction=None,
-                 magmatism_Ts0=None, preset_initial_temperature=None,
+                 magmatism_Ts0=None, preset_initial_temperature=None, temperature_solver=None,
                  asthenosphere_label='asthenosphere', seed_label='weak_seed', sampling=100.0, min_thickness=None,
                  verbose=True):
 
@@ -475,7 +475,8 @@ class SVGScenario:
         self._experiment = domain.get('experiment', {})
         self.source = {}
         self._read_settings(regime, velocity, moving_boundary, quiescence_time, time_max,
-                            magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature)
+                            magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature,
+                            temperature_solver)
 
         #layers
         self.asthenosphere_label = asthenosphere_label
@@ -509,6 +510,7 @@ class SVGScenario:
         #index of the layer at each node, sticky air and lithosphere along x
         self.grid_layers = layer_grid(self.layers, self.z)
         self.thickness_sa = self.layers[-1].interface #base of the sticky air
+        self.surface_id = len(self.layers) - 2 #interface ID of the surface: top of the layer below the sticky air
         self.idx_ast = max(layer_indices(self.layers, asthenosphere_label))
         self.thickness_litho = self.layers[self.idx_ast+1].interface - self.thickness_sa #surface to the top of the asthenosphere
         self.thickness_mantle = np.zeros(self.Nx) #lithospheric mantle (olivine rheologies above the asthenosphere)
@@ -555,7 +557,8 @@ class SVGScenario:
         return value
 
     def _read_settings(self, regime, velocity, moving_boundary, quiescence_time, time_max,
-                       magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature):
+                       magmatism, magmatism_extraction, magmatism_Ts0, preset_initial_temperature,
+                       temperature_solver):
         time_units = {'Myr': 1.0, 'My': 1.0, 'kyr': 1.0e-3, 'yr': 1.0e-6}
 
         self.regime = str(self._setting('regime', regime, 'rifting')).strip().lower()
@@ -602,6 +605,11 @@ class SVGScenario:
             if(not os.path.exists(preset)):
                 raise SVGInputError(f"preset_initial_temperature not found: {preset}")
         self.preset_initial_temperature = preset
+
+        solver = str(self._setting('temperature_solver', temperature_solver, '2D')).strip()
+        self.temperature_solver = {'2d': '2D', 'columns': 'columns', '1d': 'columns'}.get(solver.lower())
+        if(self.temperature_solver is None):
+            raise SVGInputError(f"Unknown temperature_solver '{solver}'. Use 2D or columns.")
 
         #Velocity and time:
         #   rifting: extension, the moving boundary moves outwards with velocity
@@ -682,22 +690,29 @@ class SVGScenario:
     # Initial temperature
     ###########################################################################
 
-    ## TemperatureFieldBuilder has new functions to solve temperature field using spsolve.
-    ## the field can be solved for many 1D columns or the whole 2D lithosphere. New implements
-    ## will set the boundary condition to the basal temperature (T(z=Lz)).
-    ## the boundary conditions could be given from the layers.
     def build_temperature(self):
         '''
-        Initial temperature (Nz, Nx): conductive model (TemperatureFieldBuilder.solve_conductive_columns), or the
-        final thermal state of the preliminary scenario (preset_initial_temperature) adapted to the lithosphere of
-        each column. The field is also the temperature of the builder (self.builder.DTree.fields.temperature).
+        Initial temperature (Nz, Nx) built with a TemperatureFieldBuilder (self.temperature_builder), whose
+        lithosphere goes from the surface (base of the sticky air) to the top of the asthenosphere (LAB):
+
+        - without preset_initial_temperature: steady-state conduction in the lithosphere, with the
+          conductivity and the radiogenic heat of each layer, 0 oC at the surface and TP at the LAB, and the
+          mantle adiabat below the LAB (TemperatureFieldBuilder.apply_linear_temperature). temperature_solver
+          '2D' (default) solves the whole lithosphere at once (solve_heat_2D), so lateral conduction follows the
+          geometry of the layers; 'columns' solves each column alone (solve_heat_1D);
+        - with preset_initial_temperature: the final thermal state of the preliminary scenario adapted to the
+          lithosphere of each column.
+
+        The field is also the temperature of the builder (self.builder.DTree.fields.temperature).
         '''
-        self.temperature_builder = TemperatureFieldBuilder(self.builder, c_cap=self.ccapacity)
+        self.temperature_builder = TemperatureFieldBuilder(self.builder, LAB_interface=self.idx_ast,
+                                                           surface_interface=self.surface_id, c_cap=self.ccapacity)
         if(self.preset_initial_temperature is None):
-            self.temperature_builder.solve_conductive_columns(self.thickness_litho, time_max=self.conductive_time,
-                                                              dt_years=self.conductive_dt, t_pot=self.TP,
-                                                              delta_T=self.DeltaT, kappa=self.kappa,
-                                                              air_thickness=self.thickness_sa)
+            self.temperature_builder.apply_linear_temperature(t_pot=self.TP)
+            if(self.temperature_solver == '2D'):
+                self.temperature_builder.solve_heat_2D()
+            else:
+                self.temperature_builder.solve_heat_1D()
         else:
             depth, T_preset, sa_preset, litho_preset, self.preset_source = read_preset_temperature(self.preset_initial_temperature)
             #Without the interfaces.txt of the preliminary scenario, its lithosphere is the most common one of this scenario
@@ -1128,8 +1143,8 @@ class SVGScenario:
         lines += [f"Variable velocity field: {self.variable_bcv}", 'Initial temperature field setup:',
                   f"\tPreset of initial temperature field: {self.preset_initial_temperature is not None}"]
         if(self.preset_initial_temperature is None):
-            lines += [f"\tIncrease in mantle basal temperature (Ta): {self.DeltaT} oC",
-                      f"\tAssumed mantle Potential Temperature for diffusive model: {self.TP} oC"]
+            lines += [f"\tSteady-state conduction in the lithosphere ({self.temperature_solver} solver)",
+                      f"\tMantle potential temperature (at the LAB): {self.TP} oC"]
         elif(hasattr(self, 'preset_source')):
             lines += [f"\tPreliminary scenario: {self.preset_source}",
                       f"\tReference lithosphere of the preliminary scenario: {self.thickness_litho_preset/1.0e3:.0f} km"]

@@ -41,6 +41,9 @@ def main(argv=None):
     parser.add_argument('--preset-initial-temperature', help='folder (or _output_temperature.nc) of a preliminary scenario: the '
                                                              'horizontal mean of its final temperature, adapted to the lithosphere '
                                                              'of the SVG, is the initial temperature (default: from the SVG, or none)')
+    parser.add_argument('--temperature-solver', choices=['2D', 'columns'], help='steady-state conduction in the lithosphere: '
+                                                                                '2D (whole lithosphere) or columns (each column '
+                                                                                'alone) (default: from the SVG, or 2D)')
     parser.add_argument('--min-thickness', type=float, help='remove thinner pieces [km] of units drawn thicker elsewhere, left by '
                                                             'overlapping shapes; 0 keeps them (default: from the SVG, or 1 km)')
     parser.add_argument('--no-plots', action='store_true', help='do not create numerical_setup.png and initial_temperature.png')
@@ -56,6 +59,7 @@ def main(argv=None):
                                time_max=args.time_max, magmatism=args.magmatism,
                                magmatism_extraction=args.magmatism_extraction, magmatism_Ts0=args.magmatism_Ts0,
                                preset_initial_temperature=args.preset_initial_temperature,
+                               temperature_solver=args.temperature_solver,
                                min_thickness=args.min_thickness)
         scenario.write_all(args.output_dir, plots=not args.no_plots, scripts=not args.no_scripts, system=args.system,
                            ncores=args.ncores, mandyoc_options=args.mandyoc_options)
