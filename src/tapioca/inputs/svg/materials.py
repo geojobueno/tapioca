@@ -11,6 +11,13 @@ import numpy as np
 from ..._variables import DEFAULT_MATERIAL, DEFAULT_MATERIALS
 
 #CLASSES
+
+## This class is creating a flat interface, it's could be called in the MandyocBuilder.create_interface().
+## Also, it's missing many properties.
+## The "params" attribute is the same thing of using a dictionary
+## The redundancy is: you create a rheology from a dict, pass the rheology to the layer
+## the layer converts the rheology to a dictionary again.
+## I think the MandyocLayer could be only a interface (xr.DataArray) in the MandyocBuilder.DTree.interfaces (xr.Dataset)
 class MandyocLayer:
     def __init__(self, layer_label, rheology,
                  density, effective_viscosity_scale_factor=1.0, radiogenic_heat_production=0.0,
@@ -68,6 +75,8 @@ class MandyocLayer:
         params.update({key: getattr(self, key) for key in DEFAULT_MATERIAL if hasattr(self, key)})
         return params
 
+## Why cohesion, friction, k, etc are not properties? 
+## I like the class, but I don't know the real gain comparing with a dictionary with the properties
 class LithologicalUnit:
     """
     Generic material: a name and the parameters of interfaces.txt (the keys of tapioca.DEFAULT_MATERIAL:

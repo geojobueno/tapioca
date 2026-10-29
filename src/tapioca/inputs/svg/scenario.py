@@ -42,7 +42,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-from ...scenClasses import TemperatureFieldBuilder, VelocityFieldBuilder
+from ..generic_input_classes import TemperatureFieldBuilder, VelocityFieldBuilder
 from .materials import MandyocLayer, BASALT
 from .reader import SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, layers_to_builder, points_from_spacing
 
@@ -217,6 +217,10 @@ def _read_step_data(prop, step, Nz, Nx, folder):
     data = np.loadtxt(os.path.join(folder, f"{prop}_{step}.txt"), skiprows=2, unpack=True, comments="P")
     return np.reshape(data, (Nz, Nx))
 
+
+## This function should be in _aux_functions. The correct solution is to call the 
+## `MandyocScenario` to load the temperature field and then extract the desired variables.
+## In this way, is not necessary to load all params and check all those settings.
 def read_preset_temperature(path):
     '''
     Horizontal mean of the final temperature field of a preliminary scenario.
@@ -237,6 +241,8 @@ def read_preset_temperature(path):
     '''
     folder = os.path.dirname(path) if(os.path.isfile(path)) else path
     nc_file = path if(os.path.isfile(path)) else os.path.join(folder, '_output_temperature.nc')
+    ## this function looks for "_output_temperature.nc", but the default name for netcdf is: temperature.nc (meshes2netcdf.jl)
+    ## use the `MandyocScenario` to read the results avoid this error
 
     if(os.path.isfile(nc_file)):
         dataset = xr.open_dataset(nc_file)
@@ -283,6 +289,8 @@ def read_preset_temperature(path):
 
     return depth, profile, thickness_sa, thickness_litho, source
 
+## Probably the current `TemperatureFieldBuilder` can be called to adapt the preset temperature. 
+## the surface and LAB interfaces inside the builder could remove the complicated loop inside this function
 def adapt_preset_temperature(depth_ref, T_ref, sa_ref, litho_ref, z, thickness_sa, thickness_litho, thickness_mantle):
     '''
     Initial temperature field (Nz, Nx) from the horizontal mean profile of a preliminary scenario,
@@ -338,6 +346,7 @@ def adapt_preset_temperature(depth_ref, T_ref, sa_ref, litho_ref, z, thickness_s
     T[T <= 1.0e-7] = 0.0 #dealing with <=0 values inherited from interpolation
     return T
 
+## Is it necessary? If yes, this function should be moved to auxilary functions
 def _write_clean(fname, text):
     '''Write text without indentation and empty lines (as the param.txt of Mandyoc).'''
     with open(fname, "w") as f:
@@ -673,6 +682,10 @@ class SVGScenario:
     # Initial temperature
     ###########################################################################
 
+    ## TemperatureFieldBuilder has new functions to solve temperature field using spsolve.
+    ## the field can be solved for many 1D columns or the whole 2D lithosphere. New implements
+    ## will set the boundary condition to the basal temperature (T(z=Lz)).
+    ## the boundary conditions could be given from the layers.
     def build_temperature(self):
         '''
         Initial temperature (Nz, Nx): conductive model (TemperatureFieldBuilder.solve_conductive_columns), or the
@@ -784,6 +797,9 @@ class SVGScenario:
             if(self.moving_boundary == 'left'):
                 VX = -VX[:, ::-1] #extension with the left boundary moving outwards (to the left)
 
+        ## there are methods inside VelocityFieldBuilder to integrate the velocity field
+        ## and create a conservate field (with a tolerance)
+          
         #vertical velocity at the top to balance the inflow of the discrete boundaries
         v0 = VX[(X == 0)]
         vf = VX[(X == Lx)]
@@ -834,6 +850,9 @@ class SVGScenario:
     ###########################################################################
 
     ## A good approach is to use the "set_params" method of MandyocBuilder
+    ## I think it's complicated to assume default parameters for velocity, r_tol, particles, etc
+    ## The users should set it for their own scenarios.
+    ## also, all params (and some future params) are in `PARAMS_TYPES` in ..._variables.py
     def param_text(self, **params):
         '''
         Content of param.txt. Any parameter of the file can be changed with a keyword argument,
@@ -1132,6 +1151,8 @@ class SVGScenario:
         return self.builder.DTree.fields.YSE.isel(x=ix).values
 
     ## It's a good function to be inside the TemperatureFieldBuilder
+    ## This function should get **kwargs to set the plot
+    ## TemperatureFieldBuilder has all interfaces encapsulated
     def plot_temperature(self, fname='initial_temperature.png'):
         '''Initial temperature field with the 600, 1000 and 1300 oC isotherms and the layer interfaces.'''
         T = self.T if(self.T is not None) else self.build_temperature()
@@ -1213,6 +1234,8 @@ class SVGScenario:
         axs.legend(handles=legend_elements, ncol=len(legend_elements), loc='lower center', bbox_to_anchor=(0.5, -0.45),
                    frameon=False, title='Layers properties', title_fontsize=15, fontsize=8, columnspacing=1.0)
 
+
+        ## Idea: get the weak seed from the MandyocBuilder.DTree.interfaces, where weakening_seed > 0
         #weak seed (one annotation per body, i.e. per group of contiguous columns)
         idx_seed = layer_indices(layers, self.seed_label)
         if(len(idx_seed) > 0):

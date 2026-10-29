@@ -111,7 +111,7 @@ from matplotlib.patches import Patch
 import svgelements as se
 
 from ..._variables import DEFAULT_MATERIAL
-from ...scenClasses import MandyocBuilder
+from ..generic_input_classes import MandyocBuilder
 from .materials import MandyocLayer, get_rheology
 
 __all__ = ["SVGInputError", "read_domain", "read_units", "layers_from_svg", "layers_to_builder", "write_interfaces",
@@ -130,6 +130,7 @@ MIN_THICKNESS = 1.0e3  # default min_thickness [m]: thinner pieces of units draw
 EXPERIMENT_KEYS = ("regime", "velocity", "moving_boundary", "time_max", "quiescence_time",
                    "magmatism", "magmatism_extraction", "magmatism_Ts0", "preset_initial_temperature")  # settings of the experiment in the domain description
 
+## There is this same variable in aux_variables, with more properties.
 # key in the description -> attribute of MandyocLayer
 PROPERTY_KEYS = {
     "C": "effective_viscosity_scale_factor",
@@ -147,6 +148,7 @@ PROPERTY_KEYS.update({key: key for key in DEFAULT_MATERIAL if key not in PROPERT
 # Functions
 ###############################################################################
 
+## What is this???
 _OPERATORS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
               ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
 
@@ -164,7 +166,9 @@ def eval_number(expr):
         raise ValueError(f"invalid number: {expr!r}")
     return _eval(ast.parse(expr.strip(), mode="eval"))
 
-
+## an idea is to create a dictionary with factors and call it to convert the units. it's avoid the many ifs:
+## something like: {km:1e3, m:1, cm:100}
+## the samething can be applied to areas (km2, m2, cm2, mm2, etc) 
 def parse_thickness(value, where, name="h"):
     '''Read a length such as "120 km" or "120e3 m" and return it in m.'''
     match = re.fullmatch(r"(.+?)\s*(km|m)", value.strip())
@@ -187,14 +191,14 @@ def points_from_spacing(length, spacing, name):
         raise SVGInputError(f"{name} = {spacing / 1e3:g} km does not divide the domain ({length / 1e3:g} km).")
     return int(round(intervals)) + 1
 
-
+## what "older SVGs"? We should create a default pattern (svg 1.1 is the most popular)
 def is_setup_shape(el, label=None):
     '''True if el is a shape labelled (or with id) label, by default the setup shape of new or older SVGs.'''
     labels = (label,) if label else (SETUP_LABEL, LEGACY_SETUP_LABEL)
     return (el.tag.replace(SVG_NS, "") in SHAPE_TAGS
             and any(lb in labels for lb in (el.get(INKSCAPE_LABEL), el.get("id"))))
 
-
+## all this things could be used to create the MandyocBuilder (next implementation: create the abstract class `GeometricDomain`) 
 def read_domain(svg_file):
     '''
     Read the shape labelled "setup" (see the module docstring), or "domain" in older SVGs.
@@ -262,7 +266,7 @@ def read_domain(svg_file):
             raise SVGInputError(f"{where}: give the resolution {d} (or {N}) in the description.")
     return domain
 
-
+## If MandyocLayer is really redundant, this code have to change
 def parse_description(text, where):
     '''
     Parse the description of a shape into
@@ -432,7 +436,7 @@ def rasterize(svg_file, shape_unit, unit_names, Lx, Lz, Nx, dz, domain_id=None):
 
     return x, zdepth, dz, grid, under, colors
 
-
+## What this function do?
 def scs(a, b):
     '''Shortest common supersequence of two sequences.'''
     m, n = len(a), len(b)
@@ -541,7 +545,8 @@ def remove_slivers(grid, under, dz, Lz, min_thickness, unit_names, verbose=True)
                   f"thinner than min_thickness = {min_thickness / 1e3:g} km): it takes the unit below it.")
     return grid, under
 
-
+## I think this function can be used to create the interfaces inside the MandyocBuilder.
+## PROBLEM: positive downwards ; Mandyoc is positive upwards
 def build_stack(grid, dz, Lz, unit_names):
     '''
     Return the stack of units (indices, bottom to top) and the base depth of each
@@ -601,7 +606,7 @@ def build_stack(grid, dz, Lz, unit_names):
             base[a + 1:b + 1, ix] = np.clip(drawn[b, near], tops[r], drawn[a, ix])  # inside the run
     return stack, unique, base
 
-
+## I don't got if the layer is rescaled or the thickness is replaced by h
 def rescale_thickness(stack, base, grid, under, unit_names, units, Lz, dz):
     '''
     Scale the drawing so that the units with h get that reference thickness.
@@ -708,7 +713,9 @@ def rescale_thickness(stack, base, grid, under, unit_names, units, Lz, dz):
                  f"more than Lz = {Lz / 1e3:.1f} km. Reduce h of some units.")
     return new_base, report
 
-
+## I think the `MandyocLayer` is equivalent to the interfaces within `MandyocBuilder`
+## May this function should return a xr.Dataset to be loaded as the interfaces or
+## the whole `MandyocBuilder.DTree.interfaces`. A delicated merge is necessary
 def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, min_thickness=None, verbose=True):
     '''
     Read the SVG and return the list of MandyocLayer (bottom to top) with their
@@ -809,6 +816,10 @@ def layers_to_builder(layers, Lx, Lz, Nz=2, path=".", seed_label="weak_seed", ve
     weakening_seed is given in their description.
     '''
     builder = MandyocBuilder(path, Nx=len(layers[0].interface), Nz=Nz, Lx=Lx, Lz=Lz, verbose=verbose)
+    ## this functions is getting the dictionary inside layer, editing just one key and
+    ## returning the dictionary. Also, a function inside a function is not a good practice
+    ## I think the "weakning_seed" must be a parameter that the user should set in the .svg, and
+    ## be a interpreted parameter from the name of the layer. 
     def material(layer):
         params = layer.material()
         if layer.layer_label == seed_label and not hasattr(layer, "weakening_seed"):
@@ -820,7 +831,7 @@ def layers_to_builder(layers, Lx, Lz, Nz=2, path=".", seed_label="weak_seed", ve
         builder.create_interface(i, -1.0 * layers[i+1].interface, interface_name=f"{i:02d}_{layer.layer_label}", **material(layer))
     return builder
 
-
+## Why is there a function to export calling the builder export?
 def write_interfaces(layers, Lx, Lz, fname="interfaces.txt"):
     '''Write the interfaces.txt of Mandyoc (parameters of the layers and the interfaces, bottom to top) with MandyocBuilder.'''
     with tempfile.TemporaryDirectory() as folder:  # export_interfaces always writes <path>/interfaces.txt
