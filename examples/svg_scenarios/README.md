@@ -31,4 +31,4 @@ In compression, the opposite boundary of the moving one is fixed.
 
 The `rifting` and `quiescence` SVGs have the line `preset_initial_temperature = ../preliminary` commented
 out: uncomment it (or use `--preset-initial-temperature`) with the folder of a preliminary scenario to start
-from its final thermal state instead of the conductive model.
+from its final thermal state instead of the steady-state conduction in the lithosphere.

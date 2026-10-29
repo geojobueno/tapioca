@@ -5,17 +5,17 @@ import re
 import numpy as np
 import pytest
 
-from tapioca.inputs.svg import SVGInputError, layers_from_svg, layers_to_builder, read_domain, read_units, write_interfaces
+from tapioca.inputs.svg import SVGInputError, SVGScenario, layers_from_svg, layers_to_builder, read_setup, read_units, write_interfaces
 from tapioca.inputs.svg.reader import eval_number, parse_description
 
 from conftest import SVG_SCENARIOS, quiet, svg_path
 
 
 def _layers(svg, Nx=161):
-    domain = read_domain(str(svg))
+    setup = read_setup(str(svg))
     with quiet():
-        return domain, layers_from_svg(str(svg), domain["Lx"], domain["Lz"], Nx, domain_id=domain["id"],
-                                       min_thickness=domain.get("min_thickness"), verbose=False)
+        return setup, layers_from_svg(str(svg), setup["Lx"], setup["Lz"], Nx, setup_id=setup["id"],
+                                       min_thickness=setup.get("min_thickness"), verbose=False)
 
 
 # Descriptions ##################################################################
@@ -49,13 +49,13 @@ def test_parse_description_errors(text, message):
 # Examples ######################################################################
 
 @pytest.mark.parametrize("name", SVG_SCENARIOS)
-def test_example_domain(name):
-    domain = read_domain(str(svg_path(name)))
-    assert domain is not None, "the example must have a shape labelled 'setup'"
-    assert domain["Lx"] > 0 and domain["Lz"] > 0 and domain["Nx"] > 1 and domain["Nz"] > 1
+def test_example_setup(name):
+    setup = read_setup(str(svg_path(name)))
+    assert setup is not None, "the example must have a shape labelled 'setup'"
+    assert setup["Lx"] > 0 and setup["Lz"] > 0 and setup["Nx"] > 1 and setup["Nz"] > 1
     regime, moving_boundary = SVG_SCENARIOS[name]
-    assert domain["experiment"]["regime"] == regime
-    assert domain["experiment"].get("moving_boundary", "right") == moving_boundary
+    assert setup["experiment"]["regime"] == regime
+    assert setup["experiment"].get("moving_boundary", "right") == moving_boundary
 
 
 @pytest.mark.parametrize("name", SVG_SCENARIOS)
@@ -71,12 +71,12 @@ def test_example_units_have_reference_thickness(name):
 
 @pytest.mark.parametrize("name", SVG_SCENARIOS)
 def test_example_layers(name):
-    domain, layers = _layers(svg_path(name))
+    setup, layers = _layers(svg_path(name))
     assert layers[0].layer_label == "asthenosphere"
     assert layers[-1].rheology_name == "air"
     bases = np.array([layer.interface for layer in layers])
     assert np.all(np.diff(bases, axis=0) <= 0), "the layers are stacked from the bottom to the top"
-    assert np.all(bases[1:] >= 0) and np.all(bases[1:] <= domain["Lz"])
+    assert np.all(bases[1:] >= 0) and np.all(bases[1:] <= setup["Lz"])
 
 
 def test_h_sets_the_thickness_of_a_layer(tmp_path):
@@ -103,8 +103,8 @@ def test_h_of_the_bottom_unit_is_an_error(tmp_path):
 # Builder and interfaces.txt ######################################################
 
 def test_layers_to_builder(tmp_path):
-    domain, layers = _layers(svg_path("rifting"))
-    builder = layers_to_builder(layers, domain["Lx"], domain["Lz"], Nz=31, path=str(tmp_path))
+    setup, layers = _layers(svg_path("rifting"))
+    builder = layers_to_builder(layers, setup["Lx"], setup["Lz"], Nz=31, path=str(tmp_path))
     interfaces = builder.DTree.interfaces.ds
     assert len(interfaces.data_vars) == len(layers)
     ids = sorted(interfaces[name].attrs["id"] for name in interfaces.data_vars)
@@ -116,9 +116,19 @@ def test_layers_to_builder(tmp_path):
 
 
 def test_write_interfaces_does_not_touch_other_files(tmp_path):
-    domain, layers = _layers(svg_path("rifting"))
+    setup, layers = _layers(svg_path("rifting"))
     (tmp_path / "interfaces.txt").write_text("keep me")
-    write_interfaces(layers, domain["Lx"], domain["Lz"], str(tmp_path / "other.txt"))
+    write_interfaces(layers, setup["Lx"], setup["Lz"], str(tmp_path / "other.txt"))
     assert (tmp_path / "interfaces.txt").read_text() == "keep me"
     lines = (tmp_path / "other.txt").read_text().splitlines()
     assert lines[0].split()[0] == "C" and len(lines) == 13 + 161
+
+
+def test_only_the_setup_label_is_read(tmp_path):
+    """The shape of the domain must be labelled setup (the older label domain is not read)."""
+    svg = tmp_path / "old.svg"
+    svg.write_text(svg_path("rifting").read_text().replace('inkscape:label="setup"', 'inkscape:label="domain"')
+                   .replace('id="setup"', 'id="domain"'))
+    assert read_setup(str(svg)) is None
+    with pytest.raises(SVGInputError, match="No shape labelled 'setup'"):
+        SVGScenario(str(svg))

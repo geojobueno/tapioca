@@ -90,12 +90,12 @@ class SVGChecks(InputChecks):
     '''Checks of the scenarios drawn in SVG files (tapioca.inputs.svg.SVGScenario).'''
     error = SVGInputError
 
-    def _check_setup(self, domain: dict, svg_file: str, label: str) -> dict:
-        '''Check that the SVG has the setup shape (domain read by tapioca.inputs.svg.read_domain).'''
-        if domain is None:
+    def _check_setup(self, setup: dict, svg_file: str, label: str) -> dict:
+        '''Check that the SVG has the setup shape (read by tapioca.inputs.svg.read_setup).'''
+        if setup is None:
             self._fail(f"No shape labelled '{label}' in {svg_file}. Draw a rectangle over the model domain, "
                        f"label it '{label}' and write Lx, Lz, dx and dz in its description.")
-        return domain
+        return setup
 
     def _check_layers(self, layers: list, svg_file: str, asthenosphere_label: str) -> None:
         '''Check the stack of layers (bottom to top): an asthenosphere and the sticky air at the top.'''

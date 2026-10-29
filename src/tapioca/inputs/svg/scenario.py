@@ -49,7 +49,7 @@ from ..checks import SVGChecks
 from ._variables import (REGIMES, MANTLE_RHEOLOGIES, SYSTEMS, DEFAULT_PARAMS, ORGANIZE_SCRIPT, RUN_SCRIPT,
                          RUN_LAUNCHER, ZIP_SCRIPT)
 from .materials import MandyocLayer, BASALT
-from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, EXPERIMENT_KEYS, read_domain, layers_from_svg, layers_to_builder,
+from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, EXPERIMENT_KEYS, read_setup, layers_from_svg, layers_to_builder,
                      points_from_spacing, parse_quantity, layer_indices, slot_thickness, layer_thickness)
 
 __all__ = ["SVGScenario", "REGIMES"]
@@ -163,12 +163,12 @@ class SVGScenario(SVGChecks, VerboseExtension):
         self.verbose = verbose
         self.svg_file = self._check_file('SVG file', svg_file)
         self._check_keys('setting', settings, EXPERIMENT_KEYS)
-        domain = self._check_setup(read_domain(svg_file), svg_file, SETUP_LABEL)
+        setup = self._check_setup(read_setup(svg_file), svg_file, SETUP_LABEL)
 
         #domain and resolution
-        self.Lx, self.Lz = domain['Lx'], domain['Lz']
-        self.Nx = points_from_spacing(self.Lx, dx * 1.0e3, 'dx') if(dx) else domain['Nx']
-        self.Nz = points_from_spacing(self.Lz, dz * 1.0e3, 'dz') if(dz) else domain['Nz']
+        self.Lx, self.Lz = setup['Lx'], setup['Lz']
+        self.Nx = points_from_spacing(self.Lx, dx * 1.0e3, 'dx') if(dx) else setup['Nx']
+        self.Nz = points_from_spacing(self.Lz, dz * 1.0e3, 'dz') if(dz) else setup['Nz']
         self._check_domain(self.Lx, self.Lz, self.Nx, self.Nz)
         self.x = np.linspace(0, self.Lx, self.Nx)
         self.z = np.linspace(self.Lz, 0, self.Nz)
@@ -177,15 +177,15 @@ class SVGScenario(SVGChecks, VerboseExtension):
         self.dz = self.Lz / (self.Nz - 1)
 
         #numerical experiment: argument > SVG > default
-        self._experiment = domain.get('experiment', {})
+        self._experiment = setup.get('experiment', {})
         self.source = {}
         self._read_settings(settings)
 
         #layers
         self.asthenosphere_label = asthenosphere_label
         self.seed_label = seed_label
-        self.min_thickness = min_thickness * 1.0e3 if(min_thickness is not None) else domain.get('min_thickness', MIN_THICKNESS)
-        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, domain_id=domain['id'],
+        self.min_thickness = min_thickness * 1.0e3 if(min_thickness is not None) else setup.get('min_thickness', MIN_THICKNESS)
+        self.layers = layers_from_svg(svg_file, self.Lx, self.Lz, self.Nx, dz=sampling, setup_id=setup['id'],
                                       min_thickness=self.min_thickness, verbose=verbose)
         self._check_layers(self.layers, svg_file, asthenosphere_label)
 
