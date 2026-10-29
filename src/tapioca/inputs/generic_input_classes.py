@@ -1170,10 +1170,10 @@ class VelocityFieldBuilder:
         
         return self
 
-    def set_tectonic_regime(self, regime:str, velocity:float, moving_boundary:str='right', h_const:float=100e3,
+    def set_kinematic_regime(self, regime:str, velocity:float, moving_boundary:str='right', h_const:float=100e3,
                             air_gap:float=10e3, surface:str|int=None, conservate:bool=True):
         '''
-        Set the velocity of the left and right boundaries for a tectonic regime: a constant velocity from
+        Set the velocity of the left and right boundaries for a kinematic regime: a constant velocity from
         `air_gap` above the surface down to `h_const` below it, and a return flow below it that decreases
         linearly down to the base of the model, so that the inflow and the outflow are equal. The sticky air
         above `air_gap` has no velocity. The remaining divergence of the discrete field is removed with a

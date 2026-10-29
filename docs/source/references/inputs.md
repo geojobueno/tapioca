@@ -44,7 +44,7 @@ scenario.write_all("my_scenario", particles_per_element=100)  # keyword argument
 `SVGScenario` is built on the generic builders: `scenario.builder` is a `MandyocBuilder` with the interfaces
 and the material fields of the SVG, the temperature is solved by a `TemperatureFieldBuilder` (`solve_heat_2D`, or
 `solve_heat_1D` with `temperature_solver="columns"`) and the boundary velocities of the regime are set by
-`VelocityFieldBuilder.set_tectonic_regime`. The settings are checked by `SVGChecks` (`inputs/checks.py`). The input
+`VelocityFieldBuilder.set_kinematic_regime`. The settings are checked by `SVGChecks` (`inputs/checks.py`). The input
 files are exported by `scenario.builder`, so they can be changed by script before writing:
 
 ```python

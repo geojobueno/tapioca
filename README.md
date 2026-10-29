@@ -38,7 +38,7 @@ pip install -e .
 ## Tests
 
 The tests use [pytest](https://docs.pytest.org) and cover the variables and auxiliary functions, the materials,
-the generic builders (`tapioca.inputs`: temperature solvers and tectonic regimes), the checks of the input
+the generic builders (`tapioca.inputs`: temperature solvers and kinematic regimes), the checks of the input
 parameters, the SVG scenarios of `examples/svg_scenarios` (on a coarse grid, with water and magmatic layers and
 the preset of the initial temperature), the command line tools and the post-processing of
 `examples/continental_rift`. From the root of the repository:

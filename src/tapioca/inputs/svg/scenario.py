@@ -441,7 +441,7 @@ class SVGScenario(SVGChecks, VerboseExtension):
     def build_velocity(self):
         '''
         Initial velocity (Nz, Nx) with the boundary conditions of the regime (None in the quiescence regime),
-        set by VelocityFieldBuilder.set_tectonic_regime (self.velocity_builder): constant velocity down to h_v_const
+        set by VelocityFieldBuilder.set_kinematic_regime (self.velocity_builder): constant velocity down to h_v_const
         below the surface (reference thickness + 20 km, where the lithosphere is thickest in rifting and accordion,
         as in M300, and at the moving boundary in compression) and the return flow below it, so that the integral of
         the inflow is zero. Rifting and accordion are extensions; in compression the return flow leaves through the
@@ -460,7 +460,7 @@ class SVGScenario(SVGChecks, VerboseExtension):
         self.h_v_const = thickness_ref_bc + 20.0e3 #thickness with constant velocity
 
         v = VelocityFieldBuilder(self.builder, units='cm/y')
-        v.set_tectonic_regime('compression' if(self.regime == 'compression') else 'extension', self.velocity,
+        v.set_kinematic_regime('compression' if(self.regime == 'compression') else 'extension', self.velocity,
                               moving_boundary=self.moving_boundary, h_const=self.h_v_const, air_gap=self.fac_air,
                               surface=self.surface_id)
         self.builder.create_velocity_field(v)

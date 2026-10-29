@@ -92,7 +92,7 @@ classDiagram
     }
     class VelocityFieldBuilder {
         +DataTree velocs
-        +set_tectonic_regime()
+        +set_kinematic_regime()
         +conservate_veloc()
     }
     SVGScenario *-- MandyocBuilder
@@ -108,7 +108,7 @@ classDiagram
     stack of layers, combinations of settings) and raises `SVGInputError` with a message that names the parameter.
 *   **`SVGScenario` (`inputs/svg/scenario.py`):** reads the settings (argument > SVG > default), chooses the water and
     magmatic layers, and drives the generic builders: the temperature (`solve_heat_2D` by default, or `solve_heat_1D`),
-    the velocity of the tectonic regime (`set_tectonic_regime`) and the files (`write_all`).
+    the velocity of the tectonic regime (`set_kinematic_regime`) and the files (`write_all`).
 *   **`reader` (`inputs/svg/reader.py`):** turns the shapes into a single stack of layers, bottom to top, with the
     depth of the base of each layer in every column, and converts it into the interfaces of a `MandyocBuilder`.
 *   **`MandyocLayer` / `LithologicalUnit` (`inputs/svg/materials.py`):** a layer of the stack and its material (the 13
@@ -188,5 +188,5 @@ flowchart LR
 *   **Interfaces:** ID `i` is the top of layer `i` and carries its material; ID `-1` is the sticky air.
 *   **Surface and LAB:** the surface is the top of the solid layers (the base of the sticky air, or of the water
     when `water_layer` is given); the LAB is the top of the asthenosphere. Both are passed by ID to
-    `TemperatureFieldBuilder` and to `set_tectonic_regime`.
+    `TemperatureFieldBuilder` and to `set_kinematic_regime`.
 *   **Water and magmatic layers:** chosen by the user (label or ID), never guessed from their position.

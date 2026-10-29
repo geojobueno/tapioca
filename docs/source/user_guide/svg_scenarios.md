@@ -151,7 +151,7 @@ moving boundary (e.g. an oceanic plate pushed towards a continent), and the oppo
 With `moving_boundary = symmetric` (rifting and accordion), the reference frame is at the centre of the
 domain: both boundaries move outwards with `velocity`/2, each with its own return flow below the constant
 velocity, so that the integral of the inflow is zero on each boundary. The profiles are set by
-`VelocityFieldBuilder.set_tectonic_regime`.
+`VelocityFieldBuilder.set_kinematic_regime`.
 
 ## Water and magmatic layers
 

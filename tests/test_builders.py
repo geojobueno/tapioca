@@ -106,10 +106,10 @@ def test_velocity_builder_conserves_the_flux(builder):
 @pytest.mark.parametrize("regime, moving_boundary", [("extension", "right"), ("extension", "left"),
                                                      ("extension", "symmetric"), ("compression", "right"),
                                                      ("compression", "left")])
-def test_tectonic_regimes_conserve_the_flux(builder, regime, moving_boundary):
+def test_kinematic_regimes_conserve_the_flux(builder, regime, moving_boundary):
     with quiet():
         v = VelocityFieldBuilder(builder, units="cm/y")
-        v.set_tectonic_regime(regime, 1.0, moving_boundary=moving_boundary, h_const=140e3)
+        v.set_kinematic_regime(regime, 1.0, moving_boundary=moving_boundary, h_const=140e3)
         assert abs(v.integrate_normal_components()) < 1e-15
     left, right = v.velocs["left"].vx, v.velocs["right"].vx
     one = 0.01 / tp.SEC_PER_YEAR  # 1 cm/yr
@@ -132,7 +132,7 @@ def test_tectonic_regimes_conserve_the_flux(builder, regime, moving_boundary):
 
 def test_symmetric_compression_is_an_error(builder):
     with quiet(), pytest.raises(ValueError, match="symmetric"):
-        VelocityFieldBuilder(builder).set_tectonic_regime("compression", 1.0, moving_boundary="symmetric")
+        VelocityFieldBuilder(builder).set_kinematic_regime("compression", 1.0, moving_boundary="symmetric")
 
 
 def test_linear_velocity(builder):
