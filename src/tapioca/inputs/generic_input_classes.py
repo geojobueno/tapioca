@@ -515,6 +515,8 @@ class MandyocBuilder(GeometryDomain,VerboseExtension):
                         coords={ 'x':self.x, 'z': self.z}
                         )
 
+        ## BUG (Claude): without velocbuilder, vx and vz (constant vxconst and vzconst) are never stored in
+        ## DTree.fields, so the attrs below raise KeyError 'Could not find node at vx'.
         if velocbuilder is not None:
             vx = xr.where(vx.z==0, velocbuilder.velocs.top.vx, vx)
             vx = xr.where(vx.z==self.Lz, velocbuilder.velocs.bot.vx, vx)
@@ -915,6 +917,8 @@ class MandyocBuilder(GeometryDomain,VerboseExtension):
         
 
         fixed_parameters = list(temp_param.keys())
+        ## BUG (Claude): evaluate_params raises KeyError for a parameter that is not in PARAMS_TYPES, so the
+        ## message below ("is not in the current parameters list") is never reached.
         read_input = evaluate_params(param_file, params_str, **params_dict)
 
         for k,v in read_input.items():
@@ -1693,6 +1697,8 @@ class TemperatureFieldBuilder:
         self.H_vol = self.H * self.rho
         self.k_cond = self.kappa*self.rho*self.c_cap
 
+        ## NOTE (Claude): the default surface (penultimate interface) assumes that the layer below the sticky air is
+        ## the top of the lithosphere; with a water or a zero-thickness basalt layer the surface must be given.
         if surface_interface == None:
             surface_interface = len(self.interfaces) - 2 #getting the penultimate interface as surface
 
@@ -1733,6 +1739,7 @@ class TemperatureFieldBuilder:
         self.t_pot = t_pot
 
         for j in range(self.Nx):
+            ## BUG (Claude): division by zero where the LAB reaches the surface (lithosphere_thickness = 0).
             self.temperature[:,j] = float((t_pot)/self.lithosphere_thickness[j]) * -self.ZZ[:,j]
 
         temp_adiabatic = t_pot / np.exp(self.g * self.alpha * -self.ZZ / self.c_cap)
@@ -1867,6 +1874,9 @@ class TemperatureFieldBuilder:
             in i=0.
         """
         
+        ## BUG (Claude, minor): print instead of self.scenario._print_verbose (also "Diagonals prepared" below,
+        ## "Velocity is given in cm/y..." in VelocityFieldBuilder.__init__ and the messages of create_interface(-1)
+        ## and _evaluate_interface_position), so they are printed with verbose=False.
         print("Solving the 2D heat equation")
         d_down, d_left, d_main, d_right, d_up, b = build_diagonals_2D(self.Nz, self.Nx,
                                         self.dz,self.dx,

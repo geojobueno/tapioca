@@ -45,6 +45,8 @@ VARS_TYPES:dict = { # Outputs
 }
 """dict: Dictionary with datatypes (value) for each variable (key)."""
 
+## BUG (Claude): Mandyoc uses a year of 365 days (seg_per_ano = 365.0*24.0*3600.0 in src/header.h), so the
+## velocities converted with this value (e.g. VelocityFieldBuilder with units='cm/y') are 6.8e-4 smaller in Mandyoc.
 SEC_PER_YEAR:float = 60*60*24*365.25 # seconds per year
 """float: Conversion factor of seconds in a year."""
 
@@ -189,6 +191,8 @@ DEFAULT_MATERIALS:dict = {
         "friction_angle_max": 5.0
     },
     # Flow laws of the SVG scenarios (A, n, Q, V); the other parameters are the DEFAULT_MATERIAL ones
+    ## BUG (Claude): DRY_QUARTZ (A = 0, n = 0) and PLAGIOCLASE (A = 0) are placeholders from the old SVG code:
+    ## a layer that uses them without giving A (and n) has no valid flow law.
     "DRY_QUARTZ": {
         **DEFAULT_MATERIAL,
         "A": 0.0,

@@ -438,6 +438,8 @@ def _numba_diffusion_loop(T, kappa, H, c_cap, dx, dz, dt, num_steps, cond):
             
     return T
 
+## BUG (Claude, docstring): the code is right for the Mandyoc order (index 0 = base of the lithosphere, index -1 =
+## surface), but the docstring says that Tsurf is applied to the bottom node (index -1) and Tlab to the top (index 0).
 def spsolve_heat_col(T, k_nodes, H, Tsurf, Tlab, dz):
     """
     This function solves the 1D steady state heat diffusion equation on a single vertical 
@@ -620,6 +622,8 @@ def _visc_dislocation_creep(strain_rate:float, A:float, C:float, n:float, Q:floa
     return C * A**(-1./n) * strain_rate**((1.0-n)/n)*np.exp((Q + V*P)/(n*R*T))
 
 
+## BUG (Claude): with an int reference that is not an ID of the dataset, get_interface returns None (no error),
+## so e.g. TemperatureFieldBuilder fails later with an unrelated error. A KeyError like the one for names would help.
 def get_interface(interfaces_ds, reference:str|int):
     """
     Get a scenario builder (`MandyocBuilder`) and return an interface 

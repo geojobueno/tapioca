@@ -151,7 +151,8 @@ PROPERTY_KEYS.update({key: key for key in DEFAULT_MATERIAL if key not in PROPERT
 # Functions
 ###############################################################################
 
-## What is this???
+# Arithmetic operators accepted in the values of the descriptions (e.g. H = 1.67e-6 / 2700.0). eval_number evaluates
+# the syntax tree of the value with them, never with eval(), so a description can not run code.
 _OPERATORS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
               ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
 
@@ -439,9 +440,14 @@ def rasterize(svg_file, shape_unit, unit_names, Lx, Lz, Nx, dz, setup_id=None):
 
     return x, zdepth, dz, grid, under, colors
 
-## What this function do?
 def scs(a, b):
-    '''Shortest common supersequence of two sequences.'''
+    '''
+    Shortest common supersequence of two sequences: the shortest sequence that contains both, in order.
+    build_stack uses it to find one stack of layers (bottom to top) that fits every column of the drawing:
+    the columns [asthenosphere, mantle, crust, air] and [asthenosphere, mantle, crust, seed, crust, air] give
+    [asthenosphere, mantle, crust, seed, crust, air], and the first column gets zero thickness for the seed and
+    the second crust slot. Mandyoc needs this single stack because each interface is one z(x) over the domain.
+    '''
     m, n = len(a), len(b)
     L = np.zeros((m + 1, n + 1), dtype=int)
     L[m, :] = np.arange(n, -1, -1)
@@ -609,10 +615,11 @@ def build_stack(grid, dz, Lz, unit_names):
             base[a + 1:b + 1, ix] = np.clip(drawn[b, near], tops[r], drawn[a, ix])  # inside the run
     return stack, unique, base
 
-## I don't got if the layer is rescaled or the thickness is replaced by h
 def rescale_thickness(stack, base, grid, under, unit_names, units, Lz, dz):
     '''
-    Scale the drawing so that the units with h get that reference thickness.
+    Scale the drawing so that the units with h get that reference thickness. The drawing is rescaled, not
+    replaced: a layer with h is stretched by h / (its most common drawn thickness) in every column, so where it is
+    drawn thinner or thicker it keeps that proportion (e.g. a crust thinned to half keeps half of h).
 
     Each point of the drawing gets a vertical scale factor and, in each column,
     the depth of the interfaces is integrated from the top:
@@ -833,24 +840,31 @@ def layers_to_builder(layers, Lx, Lz, Nz=2, path=".", seed_label="weak_seed", ve
     weakening_seed is given in their description.
     '''
     builder = MandyocBuilder(path, Nx=len(layers[0].interface), Nz=Nz, Lx=Lx, Lz=Lz, verbose=verbose)
-    ## this functions is getting the dictionary inside layer, editing just one key and
-    ## returning the dictionary. Also, a function inside a function is not a good practice
-    ## I think the "weakning_seed" must be a parameter that the user should set in the .svg, and
-    ## be a interpreted parameter from the name of the layer. 
-    def material(layer):
-        params = layer.material()
-        if layer.layer_label == seed_label and not hasattr(layer, "weakening_seed"):
-            params["weakening_seed"] = 1.0
-        return params
-
-    builder.create_interface(-1, 0.0, interface_name=f"{len(layers)-1:02d}_{layers[-1].layer_label}", **material(layers[-1]))
+    builder.create_interface(-1, 0.0, interface_name=f"{len(layers)-1:02d}_{layers[-1].layer_label}",
+                             **layer_material(layers[-1], seed_label))
     for i, layer in enumerate(layers[:-1]):
-        builder.create_interface(i, -1.0 * layers[i+1].interface, interface_name=f"{i:02d}_{layer.layer_label}", **material(layer))
+        builder.create_interface(i, -1.0 * layers[i+1].interface, interface_name=f"{i:02d}_{layer.layer_label}",
+                                 **layer_material(layer, seed_label))
     return builder
 
-## Why is there a function to export calling the builder export?
+
+def layer_material(layer, seed_label="weak_seed"):
+    '''
+    Parameters of the interface of a layer (MandyocLayer.material). weakening_seed is a parameter of the
+    description like the others; when it is not given, the layers labelled seed_label get 1 (initial strain).
+    '''
+    params = layer.material()
+    if layer.layer_label == seed_label and not hasattr(layer, "weakening_seed"):
+        params["weakening_seed"] = 1.0
+    return params
+
+
 def write_interfaces(layers, Lx, Lz, fname="interfaces.txt"):
-    '''Write the interfaces.txt of Mandyoc (parameters of the layers and the interfaces, bottom to top) with MandyocBuilder.'''
+    '''
+    Write the interfaces.txt of Mandyoc (parameters of the layers and the interfaces, bottom to top) with
+    MandyocBuilder, to any file name: used by tapioca-svg-interfaces, which writes only the interfaces, without
+    a scenario (MandyocBuilder.export_interfaces always writes <path>/interfaces.txt).
+    '''
     with tempfile.TemporaryDirectory() as folder:  # export_interfaces always writes <path>/interfaces.txt
         layers_to_builder(layers, Lx, Lz, path=folder).export_interfaces(export="none")
         shutil.move(os.path.join(folder, "interfaces.txt"), os.path.abspath(fname))
