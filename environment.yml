@@ -1,12 +1,12 @@
-# Ambiente tapioca com versões fixadas (reprodutibilidade + documentação).
-# Inclui PETSc 3.24.5 (build OpenMPI) para compilar/rodar o Mandyoc
-# no mesmo ambiente, sem precisar ativar outro env.
+# tapioca environment with fixed versions (reproducibility and documentation).
+# Includes PETSc 3.24.5 (OpenMPI build) to build and run Mandyoc
+# in the same environment, without activating another one.
 #
-# Versões levantadas em 2026-10-28 (macOS arm64, conda-forge).
+# Versions taken on 2026-10-28 (macOS arm64, conda-forge).
 #
 #   conda env create -f environment.yml
 #   conda activate tapioca
-#   pip install -e .          # na raiz do repositório tapioca
+#   pip install -e .          # at the root of the tapioca repository
 #
 # Not installed by conda: the SVG scenarios (tapioca.inputs.svg) are read as SVG 1.1 files saved by
 # Inkscape 1.4 (tested with Inkscape 1.4.4); other versions are read with a warning.
@@ -17,7 +17,7 @@ dependencies:
   - python=3.14.10
   - pip=26.2.2
 
-  # núcleo do tapioca
+  # tapioca core
   - numpy=2.5.4
   - scipy=1.18.1
   - xarray=2026.9.0
@@ -31,17 +31,17 @@ dependencies:
   - astropy=8.0.2
   - pymp-pypi=0.4.5
 
-  # visualização / notebooks
+  # visualization / notebooks
   - pyvista=0.49.1
   - pythreejs=2.4.2
   - ipyvtklink=0.2.3
   - jupyterlab=4.6.4
   - ipython=9.17.1
 
-  # testes
+  # tests
   - pytest=9.1.1
 
-  # documentação
+  # documentation
   - sphinx=9.2.0
   - myst-parser=5.1.0
   - sphinx_rtd_theme=3.1.0
