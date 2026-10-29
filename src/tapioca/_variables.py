@@ -189,8 +189,8 @@ DEFAULT_MATERIALS:dict = {
         "friction_angle_max": 5.0
     },
     # Flow laws of the SVG scenarios (A, n, Q, V); the other parameters are the DEFAULT_MATERIAL ones
-    ## BUG (Claude): DRY_QUARTZ (A = 0, n = 0) and PLAGIOCLASE (A = 0) are placeholders from the old SVG code:
-    ## a layer that uses them without giving A (and n) has no valid flow law.
+    ## NOTE (Claude): DRY_QUARTZ (A = 0, n = 0) and PLAGIOCLASE (A = 0) are placeholders until their flow laws are
+    ## chosen: a layer that uses them must give A (and n, Q, V) in its description.
     "DRY_QUARTZ": {
         **DEFAULT_MATERIAL,
         "A": 0.0,
