@@ -27,7 +27,7 @@ def main(argv=None):
     parser.add_argument('-o', '--output-dir', default='.', help='folder of the input files (default: current folder)')
     parser.add_argument('--dx', type=float, help='horizontal resolution [km] (default: from the setup shape of the SVG)')
     parser.add_argument('--dz', type=float, help='vertical resolution [km] (default: from the setup shape of the SVG)')
-    parser.add_argument('--regime', choices=REGIMES, help='tectonic regime of the numerical experiment (default: from the SVG, or rifting)')
+    parser.add_argument('--regime', choices=REGIMES, help='kinematic regime of the numerical experiment (default: from the SVG, or rifting)')
     parser.add_argument('--velocity', type=float, help='velocity at the boundary [cm/yr] (default: from the SVG, or 1 cm/yr)')
     parser.add_argument('--moving-boundary', choices=['left', 'right', 'symmetric'], help='boundary that moves; symmetric: both, with velocity/2, in rifting and accordion (default: from the SVG, or right)')
     parser.add_argument('--quiescence-time', type=float, help='duration of the quiescence [Myr] in the accordion and quiescence '

@@ -9,7 +9,7 @@ __all__ = ["REGIMES", "MANTLE_RHEOLOGIES", "SYSTEMS", "DEFAULT_PARAMS",
            "ORGANIZE_SCRIPT", "RUN_SCRIPT", "RUN_LAUNCHER", "ZIP_SCRIPT"]
 
 REGIMES:list = ['rifting', 'compression', 'accordion', 'quiescence']
-"""list: Tectonic regimes of the SVG scenarios."""
+"""list: Kinematic regimes of the SVG scenarios."""
 MANTLE_RHEOLOGIES:list = ['wet_olivine', 'dry_olivine']
 """list: Rheologies of the lithospheric mantle (its thickness is the reference of the velocity with h_v_reference = 'lithospheric_mantle')."""
 SYSTEMS:list = ['linux', 'mac']
