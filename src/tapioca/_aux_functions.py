@@ -17,9 +17,6 @@ __all__ = ["read_params","evaluate_params","read_data","ensure_directory_exists"
            "spsolve_heat_col","build_diagonals_2D",
            "_Druker_Prager_YS","_Byerlee_law_YS","_visc_dislocation_creep"]
 
-# Old functions, mostly made to handle the old format of data management
-# Could be useful for people using older versions of Mandyoc
-
 def read_params(path_param:str)->dict:
     '''
     Loads the param.txt in the form of a dictionary. 
