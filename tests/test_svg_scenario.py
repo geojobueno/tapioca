@@ -95,10 +95,10 @@ def test_velocity_field(written):
     interior = scenario.VX[:, 1:-1]
     assert np.all(interior == 0), "velocity only at the boundaries"
     lithosphere = scenario.Z[:, 0] < scenario.thickness_sa[0] + scenario.h_v_const
-    v_cm = scenario.velocity / (100 * scenario.velocity_builder.unifac * 365 * 24 * 3600)  # cm/yr -> m/s of the SVG
+    v_ms = scenario.velocity * 0.01 / tp.SEC_PER_YEAR  # cm/yr -> m/s
     if moving_boundary == "symmetric":
         np.testing.assert_allclose(right, -left)
-        assert right[lithosphere & (scenario.Z[:, 0] > scenario.thickness_sa[0])].max() == pytest.approx(v_cm / 2)
+        assert right[lithosphere & (scenario.Z[:, 0] > scenario.thickness_sa[0])].max() == pytest.approx(v_ms / 2)
     elif regime == "compression":
         fixed = right if moving_boundary == "left" else left
         assert np.all(fixed == 0), "the opposite boundary is fixed"

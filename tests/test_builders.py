@@ -103,12 +103,36 @@ def test_velocity_builder_conserves_the_flux(builder):
     assert float(abs(vx.isel(x=slice(1, -1), z=slice(1, -1))).max()) == 0  # only the boundaries
 
 
-def test_velocity_builder_profiles(builder):
-    profile = np.linspace(-1e-10, 1e-10, Nz)
+@pytest.mark.parametrize("regime, moving_boundary", [("extension", "right"), ("extension", "left"),
+                                                     ("extension", "symmetric"), ("compression", "right"),
+                                                     ("compression", "left")])
+def test_tectonic_regimes_conserve_the_flux(builder, regime, moving_boundary):
     with quiet():
-        v = VelocityFieldBuilder(builder, units="m/s").set_profile("left", vx=profile)
-        builder.create_velocity_field(v)
-    np.testing.assert_array_equal(builder.DTree.fields.vx.isel(x=0).values, profile)
+        v = VelocityFieldBuilder(builder, units="cm/y")
+        v.set_tectonic_regime(regime, 1.0, moving_boundary=moving_boundary, h_const=140e3)
+        assert abs(v.integrate_normal_components()) < 1e-15
+    left, right = v.velocs["left"].vx, v.velocs["right"].vx
+    one = 0.01 / tp.SEC_PER_YEAR  # 1 cm/yr
+    lithosphere = dict(z=-100e3)  # constant velocity (surface at -40 km, h_const = 140 km)
+    air = dict(z=0.0)  # more than air_gap (10 km) above the surface: no velocity
+    assert float(left.sel(**air)) == 0 and float(right.sel(**air)) == 0
+    if moving_boundary == "symmetric":
+        np.testing.assert_allclose(right.values, -left.values)
+        assert float(right.sel(**lithosphere)) == pytest.approx(one / 2)
+    elif regime == "extension":
+        moving = right if moving_boundary == "right" else left
+        sign = 1 if moving_boundary == "right" else -1
+        assert float(moving.sel(**lithosphere)) == pytest.approx(sign * one)  # outwards
+    else:
+        moving, fixed = (right, left) if moving_boundary == "right" else (left, right)
+        sign = -1 if moving_boundary == "right" else 1
+        assert float(moving.sel(**lithosphere)) == pytest.approx(sign * one)  # inwards
+        assert np.all(fixed.values == 0)
+
+
+def test_symmetric_compression_is_an_error(builder):
+    with quiet(), pytest.raises(ValueError, match="symmetric"):
+        VelocityFieldBuilder(builder).set_tectonic_regime("compression", 1.0, moving_boundary="symmetric")
 
 
 def test_linear_velocity(builder):

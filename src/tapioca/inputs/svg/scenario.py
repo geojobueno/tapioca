@@ -739,105 +739,32 @@ class SVGScenario:
 
     def build_velocity(self):
         '''
-        Initial velocity (Nz, Nx) with the boundary conditions of the regime (None in the quiescence regime).
-        Constant velocity down to h_v_const below the surface (reference thickness + 20 km, where the lithosphere
-        is thickest in rifting and accordion, as in M300, and at the moving boundary in compression) and the return
-        flow below it, so that the integral of the inflow is zero. In compression the return flow leaves through the
-        moving boundary and the opposite boundary is fixed (VX = 0). With moving_boundary = symmetric (rifting and
-        accordion), both boundaries move outwards with velocity/2, each with its own return flow.
-        The profiles of the boundaries are given to a VelocityFieldBuilder (self.velocity_builder), which creates the
-        velocity fields of the builder (self.builder.DTree.fields.vx and vz).
+        Initial velocity (Nz, Nx) with the boundary conditions of the regime (None in the quiescence regime),
+        set by VelocityFieldBuilder.set_tectonic_regime (self.velocity_builder): constant velocity down to h_v_const
+        below the surface (reference thickness + 20 km, where the lithosphere is thickest in rifting and accordion,
+        as in M300, and at the moving boundary in compression) and the return flow below it, so that the integral of
+        the inflow is zero. Rifting and accordion are extensions; in compression the return flow leaves through the
+        moving boundary and the opposite boundary is fixed. With moving_boundary = symmetric (rifting and accordion),
+        both boundaries move outwards with velocity/2, each with its own return flow. In accordion, scale_bcv.txt
+        changes the velocity in time.
+        The velocity fields are those of the builder (self.builder.DTree.fields.vx and vz).
         '''
         if(not self.velocity_from_ascii):
             self.VX, self.VZ = None, None
             return None
 
-        X, Z, Lx, Lz, Nx = self.X, self.Z, self.Lx, self.Lz, self.Nx
-        idx_bc = 0 if(self.moving_boundary == 'left') else Nx - 1 #column of the moving boundary
-        thickness_sa_bc = self.thickness_sa[idx_bc]
-
-        if(self.h_v_reference == 'lithosphere'):
-            thickness_ref_x = self.thickness_litho
-        else:
-            thickness_ref_x = self.thickness_mantle
+        idx_bc = 0 if(self.moving_boundary == 'left') else self.Nx - 1 #column of the moving boundary
+        thickness_ref_x = self.thickness_litho if(self.h_v_reference == 'lithosphere') else self.thickness_mantle
         thickness_ref_bc = thickness_ref_x[idx_bc] if(self.regime == 'compression') else thickness_ref_x.max()
-
-        vL = (0.5*self.velocity/100) / SEC_PER_YEAR  # m/s
         self.h_v_const = thickness_ref_bc + 20.0e3 #thickness with constant velocity
-        ha = Lz - thickness_sa_bc - self.h_v_const
-        vR = 2 * vL * (self.h_v_const + self.fac_air + ha) / ha #to ensure the integral equals zero
 
-        VX = np.zeros_like(X)
-        if(self.regime == 'compression'):
-            #Convergence with the opposite boundary fixed (VX = 0): the moving boundary pushes the lithosphere
-            #inwards (2*vL = velocity) down to h_v_const and all the inflow leaves through the same boundary in the
-            #return flow below it. The return flow takes the inflow of both boundaries of the extensional profile,
-            #so vR is doubled to keep the integral equal to zero.
-            vR = 2 * vR
-            x_bc = 0 if(self.moving_boundary == 'left') else Lx
-            cond = X == x_bc
-            VX[cond] = 2 * vL
-            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == x_bc)
-            VX[cond] -= vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
-            cond = Z <= thickness_sa_bc - self.fac_air
-            VX[cond] = 0
-            if(self.moving_boundary == 'right'):
-                VX = -VX #the right boundary moves to the left
-        elif(self.moving_boundary == 'symmetric'):
-            #Extension with the reference frame at the centre of the domain: each boundary moves outwards with
-            #vL (2*vL = velocity) down to h_v_const and has its own return flow below it (inflow), with ha and vR
-            #of its own sticky air thickness, so that the integral is zero on each boundary.
-            for x_bc, idx, sign in ((0, 0, -1), (Lx, Nx - 1, +1)):
-                sa_bc = self.thickness_sa[idx]
-                ha_bc = Lz - sa_bc - self.h_v_const
-                vR_bc = 2 * vL * (self.h_v_const + self.fac_air + ha_bc) / ha_bc
-                column = X == x_bc
-                VX[column] = vL
-                cond = column & (Z > self.h_v_const + sa_bc)
-                VX[cond] -= vR_bc * (Z[cond] - self.h_v_const - sa_bc) / ha_bc
-                VX[column & (Z <= sa_bc - self.fac_air)] = 0
-                VX[column] *= sign
-        else:
-            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == 0)
-            VX[cond] = vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
-            cond = (Z > self.h_v_const + thickness_sa_bc) & (X == Lx)
-            VX[cond] = -vR * (Z[cond] - self.h_v_const - thickness_sa_bc) / ha
-            cond = X == Lx
-            VX[cond] += +2 * vL
-            cond = Z <= thickness_sa_bc - self.fac_air
-            VX[cond] = 0
-
-            #The profile above is extensional, with the right boundary moving outwards (2*vL = velocity).
-            #With the left moving boundary it is mirrored (in accordion, scale_bcv.txt reverses it in time):
-            if(self.moving_boundary == 'left'):
-                VX = -VX[:, ::-1] #extension with the left boundary moving outwards (to the left)
-
-        ## there are methods inside VelocityFieldBuilder to integrate the velocity field
-        ## and create a conservate field (with a tolerance)
-          
-        #vertical velocity at the top to balance the inflow of the discrete boundaries
-        v0 = VX[(X == 0)]
-        vf = VX[(X == Lx)]
-        sv0 = np.sum(v0[1:-1]) + (v0[0] + v0[-1]) / 2.0
-        svf = np.sum(vf[1:-1]) + (vf[0] + vf[-1]) / 2.0
-        vv = -(svf - sv0) * self.dz / Lx
-        VZ = np.zeros_like(X)
-        VZ[Z == 0] = vv
-
-        ## This code is redundat:
-        ## A 2D field is created, the profiles are passed to the VelocityFieldBuilder
-        ## and then the 2D fields are recreated again.
-
-        #boundary profiles in the generic velocity builder, which creates the fields of the scenario builder
-        v = VelocityFieldBuilder(self.builder, units='m/s')
-        v.set_profile('left', vx=VX[:, 0], vz=VZ[:, 0])
-        v.set_profile('right', vx=VX[:, -1], vz=VZ[:, -1])
-        v.set_profile('bot', vx=VX[0, :], vz=VZ[0, :])
-        v.set_profile('top', vx=VX[-1, :], vz=VZ[-1, :])
+        v = VelocityFieldBuilder(self.builder, units='cm/y')
+        v.set_tectonic_regime('compression' if(self.regime == 'compression') else 'extension', self.velocity,
+                              moving_boundary=self.moving_boundary, h_const=self.h_v_const, air_gap=self.fac_air,
+                              surface=self.surface_id)
         self.builder.create_velocity_field(v)
         self.velocity_builder = v
 
-        self.vL = vL
         self.VX = self.builder.DTree.fields.vx.values
         self.VZ = self.builder.DTree.fields.vz.values
         return self.VX, self.VZ
@@ -1138,7 +1065,7 @@ class SVGScenario:
             lines.append(f"\t{label}: x = {self.x[ixp]/1.0e3:.0f} km")
         lines += [' ', f"Numerical experiment: {self.regime}", f"Velocity field: {self.velocity_from_ascii}"]
         if(self.velocity_from_ascii and self.VX is not None):
-            lines.append(f"inital velocity: {self.vL*SEC_PER_YEAR*2*100} cm/yr")
+            lines.append(f"initial velocity: {self.velocity:g} cm/yr")
             lines.append(f"\tmoving boundary: {self.moving_boundary}, constant velocity down to {self.h_v_const/1.0e3:.0f} km below the surface")
         lines += [f"Variable velocity field: {self.variable_bcv}", 'Initial temperature field setup:',
                   f"\tPreset of initial temperature field: {self.preset_initial_temperature is not None}"]

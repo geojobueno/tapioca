@@ -1166,8 +1166,108 @@ class VelocityFieldBuilder:
         
         return self
 
+    def set_tectonic_regime(self, regime:str, velocity:float, moving_boundary:str='right', h_const:float=100e3,
+                            air_gap:float=10e3, surface:str|int=None, conservate:bool=True):
+        '''
+        Set the velocity of the left and right boundaries for a tectonic regime: a constant velocity from
+        `air_gap` above the surface down to `h_const` below it, and a return flow below it that decreases
+        linearly down to the base of the model, so that the inflow and the outflow are equal. The sticky air
+        above `air_gap` has no velocity. The remaining divergence of the discrete field is removed with a
+        vertical velocity at the top (`conservate_veloc`).
+
+        * ``'extension'``: the moving boundary moves outwards with `velocity` and the return flow enters
+          through the opposite boundary. With ``moving_boundary='symmetric'`` both boundaries move outwards
+          with `velocity`/2 (reference frame at the centre of the domain), each with its own return flow.
+        * ``'compression'``: the moving boundary moves inwards with `velocity` and the return flow leaves
+          through the same boundary; the opposite boundary is fixed.
+
+        Parameters
+        ----------
+        regime: str
+            'extension' or 'compression'.
+
+        velocity: float
+            Velocity of the moving boundary, in the units of the builder (with 'symmetric', the sum of the
+            velocities of both boundaries).
+
+        moving_boundary: str, optional
+            'left', 'right' or 'symmetric' (extension only).
+
+            Default is 'right'.
+
+        h_const: float, optional
+            Thickness below the surface with constant velocity (m).
+
+            Default is 100e3.
+
+        air_gap: float, optional
+            Thickness of sticky air above the surface that moves with the boundary (m).
+
+            Default is 10e3.
+
+        surface: str or int, optional
+            Name or ID of the interface at the surface. If None, the penultimate interface (the top of
+            the layer below the sticky air).
+
+            Default is None.
+
+        conservate: bool, optional
+            Remove the divergence of the discrete field with `conservate_veloc` at the top.
+
+            Default is True.
+        '''
+        regime, moving_boundary = regime.lower(), moving_boundary.lower()
+        if regime not in ['extension', 'compression']:
+            raise ValueError(f"Unknown regime '{regime}'. Use 'extension' or 'compression'.")
+        if moving_boundary not in ['left', 'right', 'symmetric']:
+            raise ValueError(f"Unknown moving boundary '{moving_boundary}'. Use 'left', 'right' or 'symmetric'.")
+        if moving_boundary == 'symmetric' and regime == 'compression':
+            raise ValueError("A symmetric moving boundary is only available in extension.")
+
+        interfaces = self.scenario.DTree.interfaces.ds
+        if surface is None:
+            surface = len(interfaces.data_vars) - 2
+        surface = get_interface(interfaces, surface)
+        surf = {'left': float(surface.values[0]), 'right': float(surface.values[-1])}  # z of the surface (m)
+        outwards = {'left': -1.0, 'right': 1.0}
+
+        def return_velocity(v_const, z_surf):
+            '''
+            Velocity at the base of the model of a return flow (linear from 0 at h_const) whose flux is half
+            of the flux of v_const from air_gap above the surface down to the base of the model.
+            '''
+            ha = abs(self.Lz) + z_surf - h_const  # thickness of the return flow
+            return v_const * (h_const + air_gap + ha) / ha
+
+        if moving_boundary == 'symmetric':  # each boundary balances its own flux
+            profiles = {b: (velocity / 2, return_velocity(velocity, surf[b]), surf[b]) for b in surf}
+        else:
+            opposite = 'left' if moving_boundary == 'right' else 'right'
+            z_ref = surf[moving_boundary]
+            v_return = return_velocity(velocity, z_ref)
+            if regime == 'extension':
+                profiles = {moving_boundary: (velocity, v_return, z_ref), opposite: (0.0, v_return, z_ref)}
+            else:
+                profiles = {moving_boundary: (-velocity, -2 * v_return, z_ref)}
+
+        # (v_const, v_return, z of the surface): outwards velocity v_const - v_return * f, f from 0 at h_const to 1 at the base
+        for boundary, (v_const, v_return, z_ref) in profiles.items():
+            sign = outwards[boundary]
+            z_base = z_ref - h_const
+            top = z_ref + air_gap - 1e-6  # the air at air_gap above the surface does not move
+            self.set_region(boundary, [z_base, top], vx=sign * v_const)
+            self.linear_velocity(boundary, 'vx', range=[self.Lz, z_base], clims=[self.Lz, z_base],
+                                 vlims=[sign * (v_const - v_return), sign * v_const])
+
+        if conservate:
+            self.conservate_veloc('top')
+
+        self.scenario._print_verbose(f'{regime} with the {moving_boundary} moving boundary: velocity = {velocity:g} '
+                                     f'{self.units}, constant down to {h_const/1e3:g} km below the surface')
+        return self
+
     def _create_mask(self, values_range, boundary):
-        ''' 
+        '''
         Internal method to get the masked interval
         '''
         if values_range is None:
