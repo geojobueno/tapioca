@@ -14,7 +14,8 @@ import argparse
 import sys
 
 from .reader import SVGInputError
-from .scenario import SVGScenario, REGIMES, SYSTEMS
+from ._variables import REGIMES, SYSTEMS
+from .scenario import SVGScenario
 
 __all__ = ["main"]
 

@@ -116,6 +116,7 @@ from ..generic_input_classes import MandyocBuilder
 from .materials import MandyocLayer, get_rheology
 
 __all__ = ["SVGInputError", "read_domain", "read_units", "layers_from_svg", "layers_to_builder", "write_interfaces",
+           "layer_indices", "slot_thickness", "layer_thickness",
            "plot_layers", "points_from_spacing", "EXPERIMENT_KEYS", "SETUP_LABEL"]
 
 
@@ -814,6 +815,20 @@ def layers_from_svg(svg_file, Lx, Lz, Nx, dz=100.0, domain_id=None, min_thicknes
         print(f"Sampling: dx = {x[1] - x[0]:.1f} m, dz = {dz:.1f} m; mismatched samples of the drawing after rebuild: {mismatch}")
 
     return layers
+
+
+def layer_indices(layers, label):
+    '''Return the indices (position in the stack) of the layers with the given label.'''
+    return [i for i, layer in enumerate(layers) if layer.layer_label == label]
+
+def slot_thickness(layers, i, ix):
+    '''Thickness [m] of the i-th layer of the stack at column(s) ix.'''
+    top = layers[i+1].interface[ix] if i < len(layers)-1 else 0.0
+    return layers[i].interface[ix] - top
+
+def layer_thickness(layers, label, ix):
+    '''Total thickness [m] of the layers with the given label at column(s) ix.'''
+    return sum(slot_thickness(layers, i, ix) for i in layer_indices(layers, label))
 
 
 def layers_to_builder(layers, Lx, Lz, Nz=2, path=".", seed_label="weak_seed", verbose=False):

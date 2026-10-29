@@ -11,7 +11,7 @@ from tapioca.inputs import MandyocBuilder, TemperatureFieldBuilder, VelocityFiel
 from tapioca.inputs.svg import SVGInputError, SVGScenario
 from tapioca.inputs.svg import cli, reader
 
-from tapioca.inputs.svg.scenario import read_preset_temperature
+from tapioca import read_preset_temperature
 
 from conftest import CONTINENTAL_RIFT, SVG_SCENARIOS, build_scenario, quiet, svg_path
 

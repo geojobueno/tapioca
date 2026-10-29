@@ -1,4 +1,4 @@
-import os, gc, json, sys, glob
+import os, gc, json, sys, glob, re
 
 import numpy as np
 import xarray as xr
@@ -12,7 +12,8 @@ from pathlib import Path
 
 from ._variables import SEC_PER_YEAR, VARIABLES_LIST, INTERFACES_PARAMETERS,PARAMS_TYPES,UNITS
 
-__all__ = ["read_params","evaluate_params","read_data","read_interfaces","split_unit","convert_units","ensure_directory_exists","export_compressed_dataset","export_compressed_datatree",
+__all__ = ["read_params","evaluate_params","read_data","read_interfaces","split_unit","convert_units",
+           "find_nearest","most_common","read_preset_temperature","adapt_preset_temperature","ensure_directory_exists","export_compressed_dataset","export_compressed_datatree",
            "_numba_diffusion_loop",
            "spsolve_heat_col","build_diagonals_2D",
            "_Druker_Prager_YS","_Byerlee_law_YS","_visc_dislocation_creep"]
@@ -202,6 +203,136 @@ def convert_units(text:str, quantity:str, default:str=None):
             raise ValueError(f"'{text}' needs a unit of {quantity}: {', '.join(UNITS[quantity])}")
         factor = UNITS[quantity][default]
     return float(number) * factor
+
+def find_nearest(array, value):
+    '''Return the index in array nearest to a given value.'''
+    array = np.asarray(array)
+    return (np.abs(array - value)).argmin()
+
+def most_common(values, decimals=-2):
+    '''Most common value of values rounded to decimals (default: 100 m).'''
+    v, c = np.unique(np.round(values, decimals), return_counts=True)
+    return v[np.argmax(c)]
+
+def read_preset_temperature(path):
+    '''
+    Horizontal mean of the final temperature field of a preliminary scenario.
+
+    Parameters
+    ----------
+    path: str
+        Folder of the preliminary scenario, with temperature.nc (read with MandyocScen) or with param.txt and the
+        temperature_*.txt of Mandyoc, or a NetCDF file with its temperature (e.g. _output_temperature.nc).
+        The interfaces.txt of the folder (or of a folder inputs* in it) gives its sticky air and lithosphere.
+
+    Returns
+    -------
+    depth: depth of the nodes from the top of the domain [m] (increasing)
+    profile: horizontal mean of the temperature [oC]
+    thickness_sa: thickness of the sticky air [m]
+    thickness_litho: thickness of the lithosphere [m] (None if the interfaces.txt of the scenario is not found)
+    source: description of the field used
+    '''
+    folder = os.path.dirname(path) if(os.path.isfile(path)) else path
+
+    if(os.path.isfile(path)): #NetCDF file with the temperature
+        with xr.open_dataset(path) as dataset:
+            temperature = dataset.temperature.isel(time=-1)
+            z, profile = temperature.z.values, temperature.mean(dim='x').values
+            source = f"{path} (time = {float(dataset.time[-1]):g} Myr)"
+    elif(os.path.isfile(os.path.join(folder, 'temperature.nc'))):
+        from .scenClasses import MandyocScen  # here to avoid a circular import
+        scenario = MandyocScen(folder, variables='temperature')
+        temperature = scenario.DTree['/mesh/original'].temperature.isel(time=-1)
+        z, profile = temperature.z.values, temperature.mean(dim='x').values
+        source = f"{folder}/temperature.nc (time = {float(temperature.time):g} Myr)"
+    else:
+        if(not os.path.isfile(os.path.join(folder, 'param.txt'))):
+            raise FileNotFoundError(f"preset_initial_temperature: no temperature.nc nor param.txt in {folder}")
+        params = read_params(os.path.join(folder, 'param.txt'))
+        steps = [int(m.group(1)) for m in (re.fullmatch(r'temperature_(\d+)\.txt', os.path.basename(f))
+                 for f in glob.glob(os.path.join(folder, 'temperature_*.txt'))) if m]
+        if(len(steps) == 0):
+            raise FileNotFoundError(f"preset_initial_temperature: no temperature_*.txt in {folder}")
+        fname = os.path.join(folder, f"temperature_{max(steps)}.txt") #final thermal structure
+        z = np.linspace(-params['lz'], 0, params['nz'])
+        profile = np.mean(read_data(fname, params['nx'], params['nz']), axis=1) #(Nz, Nx), from the bottom to the top
+        source = fname
+
+    depth = -z
+    order = np.argsort(depth)
+    depth, profile = depth[order], profile[order]
+
+    #thickness of the sticky air (last interface) and of the lithosphere (first interface = top of the asthenosphere)
+    #from the interfaces.txt of the preliminary scenario (most common values along x). Without it, the sticky air is
+    #the depth where the temperature starts to increase and the lithosphere is unknown (None).
+    thickness_sa, thickness_litho = None, None
+    for fname in [os.path.join(folder, 'interfaces.txt')] + sorted(glob.glob(os.path.join(folder, 'inputs*', 'interfaces.txt'))):
+        if(os.path.isfile(fname)):
+            interfaces_preset = -read_interfaces(fname)[1] #depth of the interfaces (Nx, n_interfaces)
+            thickness_sa = most_common(interfaces_preset[:, -1])
+            thickness_litho = most_common(interfaces_preset[:, 0]) - thickness_sa
+            source += f", interfaces from {fname}"
+            break
+    if(thickness_sa is None):
+        thickness_sa = depth[max(np.argmax(profile > 1.0) - 1, 0)]
+
+    return depth, profile, thickness_sa, thickness_litho, source
+
+def adapt_preset_temperature(depth_ref, T_ref, sa_ref, litho_ref, z, thickness_sa, thickness_litho, thickness_mantle):
+    '''
+    Initial temperature field (Nz, Nx) from the horizontal mean profile of a preliminary scenario,
+    adapted to the lithosphere of each column:
+
+    - columns with the reference lithosphere thickness litho_ref: the profile itself (as a function of the
+      depth below the surface);
+    - other columns (keels, thinned or oceanic lithosphere, ...): the profile in the crust, a linear geotherm
+      in the lithospheric mantle from the Moho down to the base of the lithosphere, and the asthenospheric
+      profile below it. Where the lithosphere is thinner than litho_ref, the asthenospheric profile is
+      extended upwards with a linear fit (adiabat) of the profile below litho_ref + 50 km.
+
+    Parameters
+    ----------
+    depth_ref, T_ref: np.array
+        Depth from the top [m] and temperature [oC] of the profile
+    sa_ref: float
+        Sticky air thickness of the profile [m]
+    litho_ref: float
+        Lithosphere thickness of the preliminary scenario [m]
+    z: np.array
+        Depth of the nodes [m]
+    thickness_sa, thickness_litho, thickness_mantle: np.array
+        Thicknesses along x [m]
+    '''
+    d_ref = depth_ref - sa_ref #depth below the surface in the preliminary scenario
+    cond = (d_ref >= litho_ref + 50.0e3) & (d_ref <= d_ref.max() - 50.0e3)
+    a, b = np.polyfit(d_ref[cond], T_ref[cond], 1) #asthenospheric profile
+
+    def T_profile(d):
+        '''Profile at depth d below the surface (extended below the preliminary domain with the fit)'''
+        return np.where(d > d_ref.max(), a*d + b, np.interp(d, d_ref, T_ref))
+
+    columns = np.round(np.vstack([thickness_sa, thickness_litho, thickness_mantle]), 1)
+    columns_unique, idx_columns = np.unique(columns, axis=1, return_inverse=True)
+    T_unique = np.zeros((len(z), columns_unique.shape[1]))
+    for k, (sa, litho, mantle) in enumerate(columns_unique.T):
+        d = z - sa #depth below the surface
+        if(abs(litho - litho_ref) < 1.0e3): #reference lithosphere
+            Tk = T_profile(d)
+        else:
+            moho = litho - mantle
+            T_below = T_profile(d) if(litho >= litho_ref) else np.maximum(T_profile(d), a*d + b) #asthenosphere
+            T_lab = T_profile(litho) if(litho >= litho_ref) else max(float(T_profile(litho)), a*litho + b)
+            T_moho = T_profile(moho)
+            Tk = np.where(d <= moho, T_profile(d), T_below)
+            in_mantle = (d > moho) & (d < litho)
+            if(litho > moho):
+                Tk[in_mantle] = T_moho + (T_lab - T_moho) * (d[in_mantle] - moho) / (litho - moho)
+        Tk[d <= 0] = 0.0 #sticky air
+        T_unique[:, k] = Tk
+    T = T_unique[:, idx_columns.ravel()]
+    T[T <= 1.0e-7] = 0.0 #dealing with <=0 values inherited from interpolation
+    return T
 
 def ensure_directory_exists(folder_path: str|Path):
     """

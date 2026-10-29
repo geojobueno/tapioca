@@ -36,299 +36,22 @@ TemperatureFieldBuilder and a VelocityFieldBuilder. The input files are exported
 so interfaces.txt has the 13 parameters of tapioca.DEFAULT_MATERIAL.
 '''
 
-import os, re, glob, shutil, platform
+import os, glob, shutil, platform
 
 import numpy as np
-import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 from ..._variables import SEC_PER_YEAR, PARAMS_TYPES
-from ..._aux_functions import read_params, read_data, read_interfaces
-from ...scenClasses import MandyocScen
+from ..._aux_functions import find_nearest, read_preset_temperature, adapt_preset_temperature
 from ..generic_input_classes import TemperatureFieldBuilder, VelocityFieldBuilder
-from ._variables import DEFAULT_PARAMS
+from ._variables import (REGIMES, MANTLE_RHEOLOGIES, SYSTEMS, DEFAULT_PARAMS, ORGANIZE_SCRIPT, RUN_SCRIPT,
+                         RUN_LAUNCHER, ZIP_SCRIPT)
 from .materials import MandyocLayer, BASALT
 from .reader import (SVGInputError, SETUP_LABEL, MIN_THICKNESS, read_domain, layers_from_svg, layers_to_builder,
-                     points_from_spacing, parse_quantity)
+                     points_from_spacing, parse_quantity, layer_indices, slot_thickness, layer_thickness)
 
 __all__ = ["SVGScenario", "REGIMES"]
-
-## This variables should be in a dedicate file to auxiliary variables
-
-REGIMES = ['rifting', 'compression', 'accordion', 'quiescence']
-MANTLE_RHEOLOGIES = ['wet_olivine', 'dry_olivine']
-SYSTEMS = ['linux', 'mac']
-
-#Script of tapioca that moves the outputs of Mandyoc to one folder per variable (copied to the scenario)
-ORGANIZE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'postrunning', '0_organize_outputs.sh')
-
-#Run script of Mandyoc (@KEY@ are replaced in write_scripts). PETSC_DIR, PETSC_ARCH and MANDYOC
-#set in the environment override the values of the script.
-RUN_SCRIPT = '''#!/usr/bin/env bash
-# Runs Mandyoc and moves the outputs to one folder per variable (0_organize_outputs.sh). Created by tapioca.
-# PETSC_DIR, PETSC_ARCH and MANDYOC set in the environment override the values below.
-
-PETSC_DIR=${PETSC_DIR:-@PETSC_DIR@}
-PETSC_ARCH=${PETSC_ARCH-@PETSC_ARCH@}
-MANDYOC=${MANDYOC:-@MANDYOC@}
-NUMBER_OF_CORES=@NCORES@
-MANDYOC_OPTIONS="@MANDYOC_OPTIONS@"
-
-touch FD.out
-@LAUNCHER@$PETSC_DIR/$PETSC_ARCH/bin/mpirun -n $NUMBER_OF_CORES $MANDYOC $MANDYOC_OPTIONS | tee FD.out
-
-# Moves the outputs to one folder per variable
-bash 0_organize_outputs.sh
-
-# Zips the inputs and the outputs (skips the files already in the zip)
-# bash zipper.sh
-'''
-
-#caffeinate keeps the Mac awake while Mandyoc runs
-RUN_LAUNCHER = {'linux': '', 'mac': 'caffeinate -i '}
-
-#Zips the scenario in <folder>.zip, skipping the files already in the zip. The outputs are in the
-#folders created by 0_organize_outputs.sh.
-ZIP_SCRIPT = '''#!/usr/bin/env bash
-# Zips the files of Mandyoc in $DIRNAME.zip, skipping the files already in the zip. Created by tapioca.
-set -eo pipefail
-
-DIRNAME=${DIRNAME:-$(basename "$PWD")}
-ZIP="${DIRNAME:?DIRNAME is not set}.zip"
-
-# Patterns: files or folders (the folders are zipped with all their files)
-patterns=(
-"interfaces.txt"
-"param.txt"
-"input*_0.txt"
-"vel_bc.txt"
-"velz_bc.txt"
-"scale_bcv.txt"
-"infos_*.txt"
-"*.svg"
-"run*.sh"
-"bc_velocity_*.txt"
-"sp_surface_global_*.txt"
-"FD.out"
-"density"
-"heat"
-"pressure"
-"surface"
-"lithos"
-"strain"
-"strain_rate"
-"temperature"
-"time"
-"velocity"
-"viscosity"
-"thermal_diffusivity"
-"steps"
-"Phi"
-"dPhi"
-"X_depletion"
-"*.bin*.txt"
-"bc*-1.txt"
-"*.log"
-# "_*.nc"
-)
-
-export LC_ALL=C   # same order for comm
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-
-# Files that match the patterns; in the folders, all their files
-# (find avoids the "argument list too long" error)
-for pat in "${patterns[@]}"; do
-    find . -maxdepth 1 -name "$pat" ! -name "$ZIP" -exec find {} -type f \\;
-done | sed 's|^\\./||' | sort -u > "$tmp/all"
-
-# Files already in the zip
-if [[ -f "$ZIP" ]]; then
-    zipinfo -1 "$ZIP" | sort -u > "$tmp/zipped"
-    grow=-g   # appends to the zip without rewriting it
-else
-    : > "$tmp/zipped"
-    grow=
-fi
-
-# Only the files that are not in the zip yet
-comm -23 "$tmp/all" "$tmp/zipped" > "$tmp/new"
-n=$(wc -l < "$tmp/new" | tr -d ' ')
-
-if [[ "$n" -eq 0 ]]; then
-    echo "No new files for $ZIP"
-else
-    echo "Adding $n file(s) to $ZIP"
-    zip -q $grow "$ZIP" -@ < "$tmp/new"
-fi
-'''
-
-###############################################################################
-# Auxiliary functions
-###############################################################################
-
-def find_nearest(array, value):
-    '''Return the index in array nearest to a given value.'''
-    array = np.asarray(array)
-    return (np.abs(array - value)).argmin()
-
-def layer_indices(layers, label):
-    '''Return the indices (position in the stack) of the layers with the given label.'''
-    return [i for i, layer in enumerate(layers) if layer.layer_label == label]
-
-def slot_thickness(layers, i, ix):
-    '''Thickness [m] of the i-th layer of the stack at column(s) ix.'''
-    top = layers[i+1].interface[ix] if i < len(layers)-1 else 0.0
-    return layers[i].interface[ix] - top
-
-def layer_thickness(layers, label, ix):
-    '''Total thickness [m] of the layers with the given label at column(s) ix.'''
-    return sum(slot_thickness(layers, i, ix) for i in layer_indices(layers, label))
-
-## In mandyoc, the default is negative downwards. This function should be corrected
-def layer_grid(layers, z):
-    '''
-    Index of the layer at each node as a (Nz, Nx) array.
-    z is the depth of the nodes (positive downwards). Nodes on an interface belong to the layer below.
-    '''
-    bases = np.array([layer.interface for layer in layers[1:]]) #(n_layers-1, Nx)
-    return (z[:, None, None] < bases[None, :, :]).sum(axis=1)
-
-def read_preset_temperature(path):
-    '''
-    Horizontal mean of the final temperature field of a preliminary scenario.
-
-    Parameters
-    ----------
-    path: str
-        Folder of the preliminary scenario, with temperature.nc (read with MandyocScen) or with param.txt and the
-        temperature_*.txt of Mandyoc, or a NetCDF file with its temperature (e.g. _output_temperature.nc).
-        The interfaces.txt of the folder (or of a folder inputs* in it) gives its sticky air and lithosphere.
-
-    Returns
-    -------
-    depth: depth of the nodes from the top of the domain [m] (increasing)
-    profile: horizontal mean of the temperature [oC]
-    thickness_sa: thickness of the sticky air [m]
-    thickness_litho: thickness of the lithosphere [m] (None if the interfaces.txt of the scenario is not found)
-    source: description of the field used
-    '''
-    folder = os.path.dirname(path) if(os.path.isfile(path)) else path
-
-    if(os.path.isfile(path)): #NetCDF file with the temperature
-        with xr.open_dataset(path) as dataset:
-            temperature = dataset.temperature.isel(time=-1)
-            z, profile = temperature.z.values, temperature.mean(dim='x').values
-            source = f"{path} (time = {float(dataset.time[-1]):g} Myr)"
-    elif(os.path.isfile(os.path.join(folder, 'temperature.nc'))):
-        scenario = MandyocScen(folder, variables='temperature')
-        temperature = scenario.DTree['/mesh/original'].temperature.isel(time=-1)
-        z, profile = temperature.z.values, temperature.mean(dim='x').values
-        source = f"{folder}/temperature.nc (time = {float(temperature.time):g} Myr)"
-    else:
-        if(not os.path.isfile(os.path.join(folder, 'param.txt'))):
-            raise SVGInputError(f"preset_initial_temperature: no temperature.nc nor param.txt in {folder}")
-        params = read_params(os.path.join(folder, 'param.txt'))
-        steps = [int(m.group(1)) for m in (re.fullmatch(r'temperature_(\d+)\.txt', os.path.basename(f))
-                 for f in glob.glob(os.path.join(folder, 'temperature_*.txt'))) if m]
-        if(len(steps) == 0):
-            raise SVGInputError(f"preset_initial_temperature: no temperature_*.txt in {folder}")
-        fname = os.path.join(folder, f"temperature_{max(steps)}.txt") #final thermal structure
-        z = np.linspace(-params['lz'], 0, params['nz'])
-        profile = np.mean(read_data(fname, params['nx'], params['nz']), axis=1) #(Nz, Nx), from the bottom to the top
-        source = fname
-
-    depth = -z
-    order = np.argsort(depth)
-    depth, profile = depth[order], profile[order]
-
-    #thickness of the sticky air (last interface) and of the lithosphere (first interface = top of the asthenosphere)
-    #from the interfaces.txt of the preliminary scenario (most common values along x). Without it, the sticky air is
-    #the depth where the temperature starts to increase and the lithosphere is unknown (None).
-    thickness_sa, thickness_litho = None, None
-    for fname in [os.path.join(folder, 'interfaces.txt')] + sorted(glob.glob(os.path.join(folder, 'inputs*', 'interfaces.txt'))):
-        if(os.path.isfile(fname)):
-            interfaces_preset = -read_interfaces(fname)[1] #depth of the interfaces (Nx, n_interfaces)
-            thickness_sa = most_common(interfaces_preset[:, -1])
-            thickness_litho = most_common(interfaces_preset[:, 0]) - thickness_sa
-            source += f", interfaces from {fname}"
-            break
-    if(thickness_sa is None):
-        thickness_sa = depth[max(np.argmax(profile > 1.0) - 1, 0)]
-
-    return depth, profile, thickness_sa, thickness_litho, source
-
-def most_common(values, decimals=-2):
-    '''Most common value of values rounded to decimals (default: 100 m).'''
-    v, c = np.unique(np.round(values, decimals), return_counts=True)
-    return v[np.argmax(c)]
-
-## Probably the current `TemperatureFieldBuilder` can be called to adapt the preset temperature. 
-## the surface and LAB interfaces inside the builder could remove the complicated loop inside this function
-def adapt_preset_temperature(depth_ref, T_ref, sa_ref, litho_ref, z, thickness_sa, thickness_litho, thickness_mantle):
-    '''
-    Initial temperature field (Nz, Nx) from the horizontal mean profile of a preliminary scenario,
-    adapted to the lithosphere of each column:
-
-    - columns with the reference lithosphere thickness litho_ref: the profile itself (as a function of the
-      depth below the surface);
-    - other columns (keels, thinned or oceanic lithosphere, ...): the profile in the crust, a linear geotherm
-      in the lithospheric mantle from the Moho down to the base of the lithosphere, and the asthenospheric
-      profile below it. Where the lithosphere is thinner than litho_ref, the asthenospheric profile is
-      extended upwards with a linear fit (adiabat) of the profile below litho_ref + 50 km.
-
-    Parameters
-    ----------
-    depth_ref, T_ref: np.array
-        Depth from the top [m] and temperature [oC] of the profile
-    sa_ref: float
-        Sticky air thickness of the profile [m]
-    litho_ref: float
-        Lithosphere thickness of the preliminary scenario [m]
-    z: np.array
-        Depth of the nodes [m]
-    thickness_sa, thickness_litho, thickness_mantle: np.array
-        Thicknesses along x [m]
-    '''
-    d_ref = depth_ref - sa_ref #depth below the surface in the preliminary scenario
-    cond = (d_ref >= litho_ref + 50.0e3) & (d_ref <= d_ref.max() - 50.0e3)
-    a, b = np.polyfit(d_ref[cond], T_ref[cond], 1) #asthenospheric profile
-
-    def T_profile(d):
-        '''Profile at depth d below the surface (extended below the preliminary domain with the fit)'''
-        return np.where(d > d_ref.max(), a*d + b, np.interp(d, d_ref, T_ref))
-
-    columns = np.round(np.vstack([thickness_sa, thickness_litho, thickness_mantle]), 1)
-    columns_unique, idx_columns = np.unique(columns, axis=1, return_inverse=True)
-    T_unique = np.zeros((len(z), columns_unique.shape[1]))
-    for k, (sa, litho, mantle) in enumerate(columns_unique.T):
-        d = z - sa #depth below the surface
-        if(abs(litho - litho_ref) < 1.0e3): #reference lithosphere
-            Tk = T_profile(d)
-        else:
-            moho = litho - mantle
-            T_below = T_profile(d) if(litho >= litho_ref) else np.maximum(T_profile(d), a*d + b) #asthenosphere
-            T_lab = T_profile(litho) if(litho >= litho_ref) else max(float(T_profile(litho)), a*litho + b)
-            T_moho = T_profile(moho)
-            Tk = np.where(d <= moho, T_profile(d), T_below)
-            in_mantle = (d > moho) & (d < litho)
-            if(litho > moho):
-                Tk[in_mantle] = T_moho + (T_lab - T_moho) * (d[in_mantle] - moho) / (litho - moho)
-        Tk[d <= 0] = 0.0 #sticky air
-        T_unique[:, k] = Tk
-    T = T_unique[:, idx_columns.ravel()]
-    T[T <= 1.0e-7] = 0.0 #dealing with <=0 values inherited from interpolation
-    return T
-
-## Is it necessary? If yes, this function should be moved to auxilary functions
-def _write_clean(fname, text):
-    '''Write text without indentation and empty lines (as the param.txt of Mandyoc).'''
-    with open(fname, "w") as f:
-        for line in text.split("\n"):
-            line = line.strip()
-            if len(line):
-                f.write(" ".join(line.split()) + "\n")
 
 ###############################################################################
 # Scenario builder
@@ -370,7 +93,8 @@ class SVGScenario:
     magmatism_Ts0 : float, optional
         magmatism_Ts0 of param.txt [oC]. Default: 1080.
     preset_initial_temperature : str, optional
-        Folder (or _output_temperature.nc) of a preliminary scenario: the horizontal mean of its final
+        Folder (with temperature.nc, or param.txt and temperature_*.txt) or NetCDF file of a preliminary
+        scenario (see tapioca.read_preset_temperature): the horizontal mean of its final
         temperature, adapted to the lithosphere of the SVG, is the initial temperature. A relative path in the
         SVG is relative to the folder of the SVG. Default: none (conductive model).
     temperature_solver : str, optional
@@ -481,8 +205,7 @@ class SVGScenario:
         ## It's necessary to create a convention for the layers ID, because there are the water and sediments layer 
         self.magmatic_layer = len(self.layers) - 2 #layer below the sticky air
 
-        #index of the layer at each node, sticky air and lithosphere along x
-        self.grid_layers = layer_grid(self.layers, self.z)
+        #sticky air and lithosphere along x
         self.thickness_sa = self.layers[-1].interface #base of the sticky air
         self.surface_id = len(self.layers) - 2 #interface ID of the surface: top of the layer below the sticky air
         self.idx_ast = max(layer_indices(self.layers, asthenosphere_label))
@@ -689,7 +412,10 @@ class SVGScenario:
             else:
                 self.temperature_builder.solve_heat_1D()
         else:
-            depth, T_preset, sa_preset, litho_preset, self.preset_source = read_preset_temperature(self.preset_initial_temperature)
+            try:
+                depth, T_preset, sa_preset, litho_preset, self.preset_source = read_preset_temperature(self.preset_initial_temperature)
+            except FileNotFoundError as err:
+                raise SVGInputError(f"preset_initial_temperature: {err}")
             #Without the interfaces.txt of the preliminary scenario, its lithosphere is the most common one of this scenario
             if(litho_preset is None):
                 values, counts = np.unique(np.round(self.thickness_litho / 1.0e3), return_counts=True)
@@ -698,9 +424,11 @@ class SVGScenario:
                       f"{litho_preset/1.0e3:.0f} km thick (the most common in {self.svg_file}).")
             self.thickness_litho_preset = litho_preset
             self.temperature_builder.t_pot = self.TP
-            self.temperature_builder.temperature.values = adapt_preset_temperature(depth, T_preset, sa_preset, litho_preset, self.z,
-                                                                                   self.thickness_sa, self.thickness_litho,
-                                                                                   self.thickness_mantle)
+            #sticky air and lithosphere of each column from the surface and the LAB of the temperature builder
+            tb = self.temperature_builder
+            tb.temperature.values = adapt_preset_temperature(depth, T_preset, sa_preset, litho_preset, -tb.z,
+                                                             -tb.surface_interface.values, tb.lithosphere_thickness.values,
+                                                             self.thickness_mantle)
             self._print(f"Preset of initial temperature: {self.preset_source}")
             self._print(f"\tsticky air of the preliminary scenario: {sa_preset/1.0e3:.0f} km; reference lithosphere: "
                         f"{litho_preset/1.0e3:.0f} km (other lithosphere thicknesses are adapted)")
@@ -749,22 +477,11 @@ class SVGScenario:
         if(not self.variable_bcv):
             return None
         if(self.dt_quiescence > 0):
-            return f""" 4
-                    {self.ti_convergence} -1.0
-                    {self.ti_quiescence} 0.01
-                    {self.tf_quiescence} -100.0
-                    {self.time_max/1.0e6} 0.01
-                    """
-        #no quiescence: convergence followed directly by extension
-        return f""" 3
-                {self.ti_convergence} -1.0
-                {self.ti_quiescence} -1.0
-                {self.time_max/1.0e6} 0.01
-                """
-
-    ###########################################################################
-    # param.txt
-    ###########################################################################
+            changes = [(self.ti_convergence, -1.0), (self.ti_quiescence, 0.01), (self.tf_quiescence, -100.0),
+                       (self.time_max/1.0e6, 0.01)]
+        else: #no quiescence: convergence followed directly by extension
+            changes = [(self.ti_convergence, -1.0), (self.ti_quiescence, -1.0), (self.time_max/1.0e6, 0.01)]
+        return f"{len(changes)}\n" + "".join(f"{t} {factor}\n" for t, factor in changes)
 
     def parameters(self, **params):
         '''
@@ -790,7 +507,6 @@ class SVGScenario:
     # Writing the files
     ###########################################################################
 
-    ## The base text of the scripts should be in a dedicated file (like aux_variables), not here
     def write_scripts(self, output_dir='.', system=None, ncores=None, mandyoc_options='',
                       petsc_dir=None, petsc_arch=None, mandyoc=None):
         '''
@@ -898,7 +614,8 @@ class SVGScenario:
             np.savetxt(path("velz_bc.txt"), self.VZ[(self.z == 0)].T)
             builder.export_field('velocity', header="v1\nv2\nv3\nv4")
             if(self.variable_bcv):
-                _write_clean(path("scale_bcv.txt"), self.scale_bcv())
+                with open(path("scale_bcv.txt"), "w") as f:
+                    f.write(self.scale_bcv())
 
         if(scripts):
             self.write_scripts(output_dir, system=system, ncores=ncores, mandyoc_options=mandyoc_options)

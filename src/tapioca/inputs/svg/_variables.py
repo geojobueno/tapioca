@@ -1,8 +1,123 @@
 '''
-Variables of the SVG scenarios (tapioca.inputs.svg.SVGScenario).
+Variables of the SVG scenarios (tapioca.inputs.svg.SVGScenario): regimes, parameters of param.txt and the
+scripts written with the input files.
 '''
 
-__all__ = ["DEFAULT_PARAMS"]
+import os
+
+__all__ = ["REGIMES", "MANTLE_RHEOLOGIES", "SYSTEMS", "DEFAULT_PARAMS",
+           "ORGANIZE_SCRIPT", "RUN_SCRIPT", "RUN_LAUNCHER", "ZIP_SCRIPT"]
+
+REGIMES:list = ['rifting', 'compression', 'accordion', 'quiescence']
+"""list: Tectonic regimes of the SVG scenarios."""
+MANTLE_RHEOLOGIES:list = ['wet_olivine', 'dry_olivine']
+"""list: Rheologies of the lithospheric mantle (its thickness is the reference of the velocity with h_v_reference = 'lithospheric_mantle')."""
+SYSTEMS:list = ['linux', 'mac']
+"""list: Systems of the run scripts."""
+
+#Script of tapioca that moves the outputs of Mandyoc to one folder per variable (copied to the scenario)
+ORGANIZE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'postrunning', '0_organize_outputs.sh')
+
+#Run script of Mandyoc (@KEY@ are replaced in write_scripts). PETSC_DIR, PETSC_ARCH and MANDYOC
+#set in the environment override the values of the script.
+RUN_SCRIPT = '''#!/usr/bin/env bash
+# Runs Mandyoc and moves the outputs to one folder per variable (0_organize_outputs.sh). Created by tapioca.
+# PETSC_DIR, PETSC_ARCH and MANDYOC set in the environment override the values below.
+
+PETSC_DIR=${PETSC_DIR:-@PETSC_DIR@}
+PETSC_ARCH=${PETSC_ARCH-@PETSC_ARCH@}
+MANDYOC=${MANDYOC:-@MANDYOC@}
+NUMBER_OF_CORES=@NCORES@
+MANDYOC_OPTIONS="@MANDYOC_OPTIONS@"
+
+touch FD.out
+@LAUNCHER@$PETSC_DIR/$PETSC_ARCH/bin/mpirun -n $NUMBER_OF_CORES $MANDYOC $MANDYOC_OPTIONS | tee FD.out
+
+# Moves the outputs to one folder per variable
+bash 0_organize_outputs.sh
+
+# Zips the inputs and the outputs (skips the files already in the zip)
+# bash zipper.sh
+'''
+
+#caffeinate keeps the Mac awake while Mandyoc runs
+RUN_LAUNCHER = {'linux': '', 'mac': 'caffeinate -i '}
+
+#Zips the scenario in <folder>.zip, skipping the files already in the zip. The outputs are in the
+#folders created by 0_organize_outputs.sh.
+ZIP_SCRIPT = '''#!/usr/bin/env bash
+# Zips the files of Mandyoc in $DIRNAME.zip, skipping the files already in the zip. Created by tapioca.
+set -eo pipefail
+
+DIRNAME=${DIRNAME:-$(basename "$PWD")}
+ZIP="${DIRNAME:?DIRNAME is not set}.zip"
+
+# Patterns: files or folders (the folders are zipped with all their files)
+patterns=(
+"interfaces.txt"
+"param.txt"
+"input*_0.txt"
+"vel_bc.txt"
+"velz_bc.txt"
+"scale_bcv.txt"
+"infos_*.txt"
+"*.svg"
+"run*.sh"
+"bc_velocity_*.txt"
+"sp_surface_global_*.txt"
+"FD.out"
+"density"
+"heat"
+"pressure"
+"surface"
+"lithos"
+"strain"
+"strain_rate"
+"temperature"
+"time"
+"velocity"
+"viscosity"
+"thermal_diffusivity"
+"steps"
+"Phi"
+"dPhi"
+"X_depletion"
+"*.bin*.txt"
+"bc*-1.txt"
+"*.log"
+# "_*.nc"
+)
+
+export LC_ALL=C   # same order for comm
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Files that match the patterns; in the folders, all their files
+# (find avoids the "argument list too long" error)
+for pat in "${patterns[@]}"; do
+    find . -maxdepth 1 -name "$pat" ! -name "$ZIP" -exec find {} -type f \\;
+done | sed 's|^\\./||' | sort -u > "$tmp/all"
+
+# Files already in the zip
+if [[ -f "$ZIP" ]]; then
+    zipinfo -1 "$ZIP" | sort -u > "$tmp/zipped"
+    grow=-g   # appends to the zip without rewriting it
+else
+    : > "$tmp/zipped"
+    grow=
+fi
+
+# Only the files that are not in the zip yet
+comm -23 "$tmp/all" "$tmp/zipped" > "$tmp/new"
+n=$(wc -l < "$tmp/new" | tr -d ' ')
+
+if [[ "$n" -eq 0 ]]; then
+    echo "No new files for $ZIP"
+else
+    echo "Adding $n file(s) to $ZIP"
+    zip -q $grow "$ZIP" -@ < "$tmp/new"
+fi
+'''
 
 DEFAULT_PARAMS:dict = {
     # Simulation options
